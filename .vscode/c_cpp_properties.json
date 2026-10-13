@@ -1,0 +1,15 @@
+{
+    "configurations": [
+        {
+            "name": "Windows x64",
+            "compilerPath": "C:/Software/Microsoft Visual Studio/18/VC/Tools/MSVC/14.51.36231/bin/Hostx64/x64/cl.exe",
+            "windowsSdkVersion": "10.0.26100.0",
+            "includePath": ["${workspaceFolder}/src"],
+            "defines": ["WIN32_LEAN_AND_MEAN", "NOMINMAX", "_DEBUG"],
+            "cStandard": "c17",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "windows-msvc-x64"
+        }
+    ],
+    "version": 4
+}

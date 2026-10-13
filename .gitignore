@@ -1,0 +1,29 @@
+# Build output and local cleanup backup
+/build/
+*.obj
+*.asi
+*.exe
+*.lib
+*.exp
+*.pdb
+*.ilk
+*.log
+
+# Local editor state; shared VS Code configuration is kept
+/.vs/
+*.swp
+*~
+
+# OS and reverse-engineering artifacts
+Thumbs.db
+desktop.ini
+.DS_Store
+*.bndb
+*.i64
+*.idb
+*.dmp
+
+# Private agent state
+/.codex/
+/.claude/
+/memory.md
