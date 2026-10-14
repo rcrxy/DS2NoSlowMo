@@ -230,6 +230,9 @@ def snapshot(pid, parameter_hash=None):
             active.append({
                 "address": hex(address), "Name_value_at_0x60": hex(struct.unpack_from("<I", data, 0x60)[0]),
                 "id_value_at_0x64": struct.unpack_from("<I", data, 0x64)[0],
+                "raw_bytes": data.hex(),
+                "curve_references_by_offset": {hex(o): hex(struct.unpack_from("<Q", data, o)[0])
+                                               for o in [0x40, 0x48, 0x50]},
                 "floats_by_offset": {hex(o): finite(struct.unpack_from("<f", data, o)[0]) for o in
                     [0, 4, 8, 0xC, 0x10, 0x28, 0x2C, 0x70, 0x74, 0x78, 0x7C, 0x80]},
             })
@@ -250,7 +253,7 @@ def snapshot(pid, parameter_hash=None):
         memory.close()
 
 
-def watch(pid, output, seconds, interval):
+def watch(pid, output, seconds, interval, capture_active_curves=False):
     baseline = snapshot(pid)
     base = int(baseline["module_base"], 16)
     controller = int(baseline["controller"], 16)
@@ -258,6 +261,7 @@ def watch(pid, output, seconds, interval):
     memory = Memory(pid)
     count = 0
     errors = 0
+    captured_curves = set()
     start = time.perf_counter()
     try:
         with output.open("w", encoding="utf-8") as stream:
@@ -284,6 +288,9 @@ def watch(pid, output, seconds, interval):
                         active.append({
                             "Name_value_at_0x60": hex(struct.unpack_from("<I", raw, 0x60)[0]),
                             "id_value_at_0x64": struct.unpack_from("<I", raw, 0x64)[0],
+                            "raw_bytes": raw.hex(),
+                            "curve_references_by_offset": {hex(o): hex(struct.unpack_from("<Q", raw, o)[0])
+                                                           for o in [0x40, 0x48, 0x50]},
                             "floats_by_offset": {hex(o): finite(struct.unpack_from("<f", raw, o)[0]) for o in
                                 [0, 4, 8, 0xC, 0x10, 0x28, 0x2C, 0x70, 0x74, 0x78, 0x7C, 0x80]},
                         })
@@ -300,6 +307,21 @@ def watch(pid, output, seconds, interval):
                     errors += 1
                     record = {"record_kind": "read_error", "elapsed_seconds": elapsed, "error": str(error)}
                 stream.write(json.dumps(record, allow_nan=False) + "\n")
+                if capture_active_curves and record["record_kind"] == "sample":
+                    for entry in record["active_entries"]:
+                        for offset, address in entry["curve_references_by_offset"].items():
+                            pointer = int(address, 16)
+                            if not pointer or pointer in captured_curves:
+                                continue
+                            captured_curves.add(pointer)
+                            curve_record = {"record_kind": "active_curve", "elapsed_seconds": elapsed,
+                                            "Name_value_at_0x60": entry["Name_value_at_0x60"],
+                                            "first_reference_offset": offset, "address": address}
+                            try:
+                                curve_record["data"] = curve_snapshot(memory, base, pointer)
+                            except (OSError, RuntimeError) as error:
+                                curve_record["read_error"] = str(error)
+                            stream.write(json.dumps(curve_record, allow_nan=False) + "\n")
                 if count % 100 == 0:
                     stream.flush()
                 deadline += interval
@@ -323,6 +345,8 @@ def main():
                         help="Also read the curves of this exact parameter Name hash (snapshot only).")
     parser.add_argument("--watch", type=float, help="Capture for this many real-time seconds.")
     parser.add_argument("--interval", type=float, default=0.01, help="Sampling interval in real-time seconds.")
+    parser.add_argument("--capture-active-curves", action="store_true",
+                        help="During watch, read each new active curve once after validating CurveResource RTTI.")
     args = parser.parse_args()
     if args.self_test:
         payload = ct.create_string_buffer(b"DS2 read-only probe test")
@@ -347,8 +371,10 @@ def main():
             raise RuntimeError("--parameter-hash is supported for snapshots only.")
         if not 0 < args.watch <= 300 or not 0.001 <= args.interval <= 1:
             raise RuntimeError("Use 0 < --watch <= 300 and 0.001 <= --interval <= 1.")
-        watch(pid, args.output, args.watch, args.interval)
+        watch(pid, args.output, args.watch, args.interval, args.capture_active_curves)
         return
+    if args.capture_active_curves:
+        raise RuntimeError("--capture-active-curves requires --watch.")
     result = snapshot(pid, args.parameter_hash)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, indent=2, ensure_ascii=True, allow_nan=False) + "\n", encoding="utf-8")

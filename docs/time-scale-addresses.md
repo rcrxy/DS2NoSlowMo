@@ -285,7 +285,29 @@ Release 编译通过 `/W4 /WX`。本地宿主验证全部关闭、只开启人�
 
 修改后用户多次拾取隐生虫，反馈没有慢动作。`build/analysis/patched-cryptobiote-pickup.jsonl` 记录 11997 次、读取错误零次，仍出现 `0x6ED5275D`，三个当前倍率全程为 `1.0`。对应汇总为 `patched-cryptobiote-pickup-summary.json`。
 
-修改后的电气虫、晶体尚未逐项实测；请求的其他用途、重复拾取条件及资源重载后的应用情况仍待验证。两个实际游戏中的关闭分支尚未通过重启逐项采样，但本地加载已确认配置选择和跳过路径。
+用户随后确认修改后的电气虫、晶体也实测生效，这两项修改后没有同步采样。请求的其他用途、重复拾取条件及资源重载后的应用情况仍待验证。
+
+## 普通 BT 击杀：未复现阶段
+
+范围已调整：首次武器使用与人类敌人发现时的慢动作暂不处理。BT 遭遇的载具强制停车单独保留，未修改；用户要求方法与前面差异过大时暂缓，当前优先复现 BT 击杀慢动作。
+
+本机 RTTI 中读取到 `DSBTDamageComponentResource`，描述符 RVA `0x445AA50`，对象大小 `0x300`，包含 `BrokenPartTimeScaleCurve=+0x220`、`StaggerTimeScaleCurve=+0x228`、`DeathTimeScaleCurve=+0x230`。这些字段只证明类型具备相关资源引用，未与本轮普通 BT 击杀关联。原始类型记录：`build/analysis/bt-damage-resource-type.json`。
+
+诊断工具增加活动条目的 `raw_bytes` 和 `curve_references_by_offset`，偏移 `0x40`、`0x48`、`0x50` 由更新代码 `0xD720A6`、`0xD720E1`、`0xD7211D` 的实际曲线读取确定。可选 `--capture-active-curves` 在连续采样中对每个首次出现的非零曲线指针做一次 RTTI 验证和快照，写独立 `active_curve` 记录；读取失败保留错误，不推断类型。此功能仅读取，不修改 ASI。
+
+PID `3108`、两项功能开启时，血液回旋镖单次击杀普通 BT：用户确认成功、无慢动作、无其他行动。`build/analysis/ordinary-bt-single-kill.jsonl` 共 17997 次采样，错误零次，活动请求全程零，控制对象六个值、管理器两个值及根对象两个值均全程为 `1.0`，没有活动曲线记录。汇总 `ordinary-bt-single-kill-summary.json`。
+
+用户对普通 BT 击杀慢动作是否存在提出疑问，指出此前使用血液手榴弹。已准备原版对照：退出后备份配置至 `build/bt-kill-ab/20261014-131209/`，两个现有功能开关临时为 `0`，插件文件未替换。`build/bt-kill-ab-state.json` 状态为 `disabled`，原值均为 `1`。待原版血液手榴弹单次击杀记录后再判断，不依据静态字段名实现新补丁。测试后恢复原 INI。
+
+对照新进程 PID `32244`：日志确认两项均跳过，`No enabled effects; game data unchanged.`。`build/analysis/bt-ab-off-human-curves.json` 与 `bt-ab-off-pickup-curves.json` 的曲线点及 `LowestPoint` 与修改前记录逐项相等，证明这两项在新进程中恢复原始资源数据。
+
+血液手榴弹击杀普通 BT 对照：用户确认成功、无慢动作。`build/analysis/ordinary-bt-grenade-off.jsonl` 共 17998 次样本，错误零次、活动请求零次、活动曲线记录零次，已监测的十个值全程 `1.0`。汇总：`ordinary-bt-grenade-off-summary.json`。没有复现出需要修改的普通 BT 击杀效果，暂不添加 BT 功能开关；未推广为所有 BT 都不存在该效果。
+
+用户要求停止监听，接下来独立测试“监视者”。采样脚本已退出，不继续读游戏进程。为延续无功能修改的对照，游戏 INI 两项仍为 `0`，`build/bt-kill-ab-state.json` 保持 `disabled`，原配置备份保留；待后续测试结束再恢复。ASI 和已有补丁代码未变。
+
+后续用户未找到“监视者”，但在对照阶段观察到大型 BT 击杀后有类似人类敌人击杀的时停，明确要求保留该效果。没有同步采样，尚无请求哈希、倍率或共用曲线证据，不能把体感相似作为同一调用路径的证明；也尚未验证现有人类敌人开关对此场景的影响。本次不新增大型 BT 修改。
+
+随后已从 `build/bt-kill-ab/20261014-131209/original.ini` 恢复原配置，原始 SHA256 `4A8F236277BB0D9CAFBCEFB88E333203BD9D3DEFDDA0E74FD041E1B8F2F14D81` 核对一致，两个值均为 `1`，状态记录当前为 `restored`。这只恢复磁盘配置；现有进程维持本轮原版对照行为，下一次重启后才启用修改。监听保持停止，ASI 和已有补丁代码未改。
 
 ## 参考
 
