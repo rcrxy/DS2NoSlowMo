@@ -8,6 +8,7 @@
 *.pdb
 *.ilk
 *.log
+__pycache__/
 
 # Local editor state; shared VS Code configuration is kept
 /.vs/

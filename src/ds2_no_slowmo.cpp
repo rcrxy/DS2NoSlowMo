@@ -3,9 +3,11 @@
 #include <cstdio>
 #include <string>
 
+#include "knockout_patch.h"
+
 namespace
 {
-    constexpr char PluginVersion[] = "0.1.0";
+    constexpr char PluginVersion[] = "0.2.0-test";
 
     std::wstring ModulePath(HMODULE module)
     {
@@ -80,13 +82,24 @@ namespace
         }
         const std::string message = std::string(header, headerLength) +
                                     "Process: " + Utf8(processPath) + "\r\nPlugin: " + Utf8(pluginPath) +
-                                    "\r\nMode: load verification only; no game patches.\r\n";
+                                    "\r\nMode: targeted knockout curve patch; Name=0x4152CF0A.\r\n";
         DWORD written = 0;
         const DWORD size = static_cast<DWORD>(message.size());
         const bool success = WriteFile(log, message.data(), size, &written, nullptr) &&
                              written == size;
-        CloseHandle(log);
         OutputDebugStringA(success ? "DS2NoSlowMo loaded.\n" : "DS2NoSlowMo: log write failed.\n");
+        if (success)
+        {
+            try
+            {
+                KnockoutPatch::Run(processPath, log);
+            }
+            catch (...)
+            {
+                KnockoutPatch::Log(log, "Disabled: initialization raised an exception.\r\n");
+            }
+        }
+        CloseHandle(log);
         return success ? 0 : 1;
     }
 
