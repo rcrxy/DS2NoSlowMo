@@ -9,9 +9,16 @@
 
 #pragma comment(lib, "bcrypt.lib")
 
-namespace KnockoutPatch
+namespace TimeScalePatch
 {
-    constexpr std::uint32_t TargetName = 0x4152CF0A;
+    enum class Effect { HumanDefeat, Pickup };
+    constexpr std::uint32_t HumanDefeatName = 0x4152CF0A;
+    constexpr std::uint32_t PickupName = 0x6ED5275D;
+
+    std::uint32_t Name(Effect effect)
+    {
+        return effect == Effect::Pickup ? PickupName : HumanDefeatName;
+    }
     constexpr std::uintptr_t ControllerSlot = 0x623E9A8;
     constexpr std::uintptr_t ParameterRTTI = 0xD708E0;
     constexpr std::uintptr_t CurveRTTI = 0x1B30D90;
@@ -166,8 +173,10 @@ namespace KnockoutPatch
     }
 
     // 0: retry until resources exist / requests finish; 1: applied; -1: reject this layout.
-    int TryApply(std::uintptr_t base, HANDLE log)
+    int TryApply(std::uintptr_t base, HANDLE log, Effect effect)
     {
+        const bool pickup = effect == Effect::Pickup;
+        const auto targetName = Name(effect);
         std::uintptr_t controller = 0;
         if (!Read(base + ControllerSlot, controller) || !controller)
             return 0;
@@ -188,7 +197,7 @@ namespace KnockoutPatch
             std::uint32_t name = 0;
             if (!Read(pointer + 0x20, name))
                 return -1;
-            if (name == TargetName)
+            if (name == targetName)
             {
                 if (target)
                     return -1;
@@ -202,10 +211,15 @@ namespace KnockoutPatch
         std::uintptr_t vtable = 0, getter = 0;
         std::array<float, 6> settings{};
         std::uint32_t priority = 0;
+        unsigned char shortSlow = 0;
         if (!Read(target, vtable) || !Read(vtable, getter) || getter != base + ParameterRTTI ||
-            !Read(target + 0x24, settings) || !Read(target + 0x60, priority) || priority != 17 ||
-            settings != std::array<float, 6>{1.0f, 1.0f, 1.0f, 1.75f, 0.1f, 0.1f} ||
-            !curves[0] || !curves[1] || curves[0] == curves[1] || curves[2])
+            !Read(target + 0x24, settings) || !Read(target + 0x60, priority) ||
+            !Read(target + 0x68, shortSlow) || priority != (pickup ? 16u : 17u) ||
+            shortSlow != (pickup ? 1 : 0) ||
+            settings != std::array<float, 6>{1.0f, 1.0f, 1.0f, pickup ? 1.0f : 1.75f, 0.1f, 0.1f} ||
+            !curves[0] || !curves[1] ||
+            (pickup ? (curves[0] != curves[1] || curves[0] != curves[2])
+                    : (curves[0] == curves[1] || curves[2] != 0)))
             return -1;
         for (auto pointer : parameters)
         {
@@ -215,14 +229,20 @@ namespace KnockoutPatch
             if (!Read(pointer + 0x40, other))
                 return -1;
             for (auto curve : other)
-                if (curve == curves[0] || curve == curves[1])
+                if (curve && (curve == curves[0] || curve == curves[1] || curve == curves[2]))
                     return -1;
         }
-        CurveEdit world{}, player{};
-        if (!PrepareCurve(base, curves[0], {{0, 1}, {0.11f, 1}, {0.2f, 0.051f}, {0.7f, 0.051f},
-                                          {1.1f, 0.3f}, {1.785f, 0.051f}, {1.8f, 0.051f}}, world) ||
-            !PrepareCurve(base, curves[1], {{0, 1}, {0.11f, 1}, {0.2f, 0.25f}, {0.75f, 0.25f},
-                                          {0.8f, 0.1f}, {1.2f, 0.1f}, {1.7f, 0.5f}, {1.8f, 0.5f}}, player))
+        std::vector<CurveEdit> edits(pickup ? 1 : 2);
+        if (pickup)
+        {
+            // All three channels point to the same verified CurveResource; edit it once.
+            if (!PrepareCurve(base, curves[0], {{0, 0.051f}, {0.45f, 0.051f}, {0.55f, 1}, {1, 1}}, edits[0]))
+                return -1;
+        }
+        else if (!PrepareCurve(base, curves[0], {{0, 1}, {0.11f, 1}, {0.2f, 0.051f}, {0.7f, 0.051f},
+                                               {1.1f, 0.3f}, {1.785f, 0.051f}, {1.8f, 0.051f}}, edits[0]) ||
+                 !PrepareCurve(base, curves[1], {{0, 1}, {0.11f, 1}, {0.2f, 0.25f}, {0.75f, 0.25f},
+                                               {0.8f, 0.1f}, {1.2f, 0.1f}, {1.7f, 0.5f}, {1.8f, 0.5f}}, edits[1]))
             return -1;
         ArrayHeader after{};
         std::uintptr_t current = 0;
@@ -230,18 +250,28 @@ namespace KnockoutPatch
             !Read(controller + 0x18, after) || std::memcmp(&table, &after, sizeof(table)) != 0 ||
             !Read(controller + 0x28, after) || after.count != 0)
             return 0;
-        if (!ApplyCurve(world, false) || !ApplyCurve(player, false))
+        bool applied = true;
+        for (const auto &edit : edits)
         {
-            const bool restoredWorld = ApplyCurve(world, true);
-            const bool restoredPlayer = ApplyCurve(player, true);
-            Log(log, "Patch write failed; rollback world=%d player=%d.\r\n", restoredWorld, restoredPlayer);
+            if (!ApplyCurve(edit, false))
+            {
+                applied = false;
+                break;
+            }
+        }
+        if (!applied)
+        {
+            bool restored = true;
+            for (const auto &edit : edits)
+                restored = ApplyCurve(edit, true) && restored;
+            Log(log, "Patch write failed: Name=0x%08X; rollback=%d.\r\n", targetName, restored);
             return -1;
         }
-        Log(log, "Applied: Name=0x4152CF0A; world curve=7 points, player curve=8 points; all Y=1.0.\r\n");
+        Log(log, "Applied: Name=0x%08X; %zu curve(s); all Y=1.0.\r\n", targetName, edits.size());
         return 1;
     }
 
-    void Run(const std::wstring &processPath, HANDLE log)
+    void Run(const std::wstring &processPath, HANDLE log, bool humanDefeat, bool pickup)
     {
         if (!SupportedFile(processPath))
         {
@@ -257,18 +287,28 @@ namespace KnockoutPatch
             Log(log, "Disabled: runtime entry bytes differ at DS2.exe+0xD70E80.\r\n");
             return;
         }
-        Log(log, "Waiting for Name=0x4152CF0A and an idle request array (up to 10 minutes).\r\n");
+        Log(log, "Waiting for enabled parameters and an idle request array (up to 10 minutes).\r\n");
+        const std::array<Effect, 2> effects{Effect::HumanDefeat, Effect::Pickup};
+        std::array<bool, 2> pending{humanDefeat, pickup};
         for (unsigned int attempt = 0; attempt < 1200; ++attempt)
         {
-            const int result = TryApply(base, log);
-            if (result != 0)
+            for (size_t i = 0; i < effects.size(); ++i)
             {
+                if (!pending[i])
+                    continue;
+                const int result = TryApply(base, log, effects[i]);
+                if (result == 0)
+                    continue;
+                pending[i] = false;
                 if (result < 0)
-                    Log(log, "Disabled: parameter/curve validation or memory access failed.\r\n");
-                return;
+                    Log(log, "Disabled: Name=0x%08X parameter/curve validation or memory access failed.\r\n", Name(effects[i]));
             }
+            if (!pending[0] && !pending[1])
+                return;
             Sleep(500);
         }
-        Log(log, "Disabled: target parameter did not become available within 10 minutes.\r\n");
+        for (size_t i = 0; i < effects.size(); ++i)
+            if (pending[i])
+                Log(log, "Disabled: Name=0x%08X did not become available within 10 minutes.\r\n", Name(effects[i]));
     }
 }

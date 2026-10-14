@@ -3,11 +3,28 @@
 #include <cstdio>
 #include <string>
 
-#include "knockout_patch.h"
+#include "time_scale_patch.h"
 
 namespace
 {
-    constexpr char PluginVersion[] = "0.2.0-test";
+    constexpr char PluginVersion[] = "0.4.0-test";
+
+    bool ReadSwitch(const std::wstring &iniPath, HANDLE log, const wchar_t *key, bool &enabled)
+    {
+        wchar_t value[64]{};
+        const DWORD length = GetPrivateProfileStringW(L"Features", key, L"1",
+                                                      value, ARRAYSIZE(value), iniPath.c_str());
+        if (length != 1 || (value[0] != L'0' && value[0] != L'1'))
+        {
+            TimeScalePatch::Log(log, "Disabled: [Features] %ls must be 0 or 1.\r\n", key);
+            return false;
+        }
+        enabled = value[0] == L'1';
+        TimeScalePatch::Log(log, "Configuration: [Features] %ls=%d (default if omitted: 1).\r\n", key, enabled);
+        if (!enabled)
+            TimeScalePatch::Log(log, "Skipped: %ls=0; effect unchanged.\r\n", key);
+        return true;
+    }
 
     std::wstring ModulePath(HMODULE module)
     {
@@ -57,6 +74,7 @@ namespace
             return 0;
         }
 
+        const std::wstring iniPath = pluginPath.substr(0, pluginSeparator + 1) + L"DS2NoSlowMo.ini";
         const std::wstring logPath = pluginPath.substr(0, pluginSeparator + 1) +
                                      L"DS2NoSlowMo.log";
         HANDLE log = CreateFileW(logPath.c_str(), GENERIC_WRITE,
@@ -82,7 +100,8 @@ namespace
         }
         const std::string message = std::string(header, headerLength) +
                                     "Process: " + Utf8(processPath) + "\r\nPlugin: " + Utf8(pluginPath) +
-                                    "\r\nMode: targeted knockout curve patch; Name=0x4152CF0A.\r\n";
+                                    "\r\nConfiguration file: " + Utf8(iniPath) +
+                                    "\r\nMode: configured human-defeat and pickup curve patches.\r\n";
         DWORD written = 0;
         const DWORD size = static_cast<DWORD>(message.size());
         const bool success = WriteFile(log, message.data(), size, &written, nullptr) &&
@@ -92,11 +111,17 @@ namespace
         {
             try
             {
-                KnockoutPatch::Run(processPath, log);
+                bool humanDefeat = false, pickup = false;
+                const bool humanValid = ReadSwitch(iniPath, log, L"DisableHumanDefeatSlowMo", humanDefeat);
+                const bool pickupValid = ReadSwitch(iniPath, log, L"DisablePickupSlowMo", pickup);
+                if ((humanValid && humanDefeat) || (pickupValid && pickup))
+                    TimeScalePatch::Run(processPath, log, humanValid && humanDefeat, pickupValid && pickup);
+                else
+                    TimeScalePatch::Log(log, "No enabled effects; game data unchanged.\r\n");
             }
             catch (...)
             {
-                KnockoutPatch::Log(log, "Disabled: initialization raised an exception.\r\n");
+                TimeScalePatch::Log(log, "Disabled: initialization raised an exception.\r\n");
             }
         }
         CloseHandle(log);

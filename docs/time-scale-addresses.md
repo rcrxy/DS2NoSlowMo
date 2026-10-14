@@ -213,7 +213,7 @@ DS2.exe+0xD714B9  vmovss  dword ptr [rcx+rax+0x80], xmm1
 python tools\analyze_timescale.py --game 'D:\SteamLibrary\steamapps\common\DEATH STRANDING 2 - ON THE BEACH\DS2.exe'
 ```
 
-输出：`build/analysis/static-evidence.json`，包含 11 个类型记录、11 个完整过程及慢动作判断回调的反汇编、入口字节、RVA 和展开信息范围。
+输出：`build/analysis/static-evidence.json`，包含 11 个类型记录、12 个完整过程及慢动作判断回调的反汇编、入口字节、RVA 和展开信息范围。
 
 工具使用本地 `build/analysis/deps` 中的 Capstone。此次从 PyPI 下载并校验了 `capstone-5.0.9-py3-none-win_amd64.whl`，未安装到全局 Python 环境；该包的 Python 绑定报告版本字符串为 `5.0.7`。新环境需要先准备这一开发分析依赖。
 
@@ -246,6 +246,46 @@ python tools\probe_timescale.py --watch 45 --interval 0.01 --output build\analys
 5. 检查重载存档或场景是否重建参数与曲线；当前版只应用一次。
 
 当前 ASI 为定向曲线修改测试版，不强制夹取通用时间倍率。
+
+## 配置开关与拾取效果定位阶段
+
+用户选择 INI 开关，重启生效，并指定优先处理电气虫／隐生虫拾取时停。`0.3.0-test` 新增 `[Features] DisableHumanDefeatSlowMo=1`，读取 ASI 同目录的 `DS2NoSlowMo.ini`；设 `0` 时跳过原来的曲线修改，缺省为 `1`，非法值停止应用并记录原因。原有游戏数据修改逻辑未变。
+
+Release 编译及本地加载分支验证通过，已部署 ASI 与 INI，哈希核对通过。旧版备份：`build/rollback/config-20261014-121501/`。当前只提供已实现功能的开关，拾取参数尚未关联，不添加尚未生效的拾取配置项。
+
+拾取定位先分别记录两类虫的单次事件，再观察短间隔重复拾取。使用现有两个时间控制对象的只读采样；在记录到实际请求或管理器变化前，不指定拾取请求哈希。遇敌／BT 暂不修改。
+
+### 拾取共享请求的实测证据
+
+`0.3.0-test` 下分别单独拾取隐生虫、电气虫和开罗尔晶体，都记录到唯一活动请求 `Name=0x6ED5275D`。三轮样本数分别为 11993、12000、11997，读取错误均为零；活动跨度分别约 0.985、0.990、0.985 秒，世界／玩家／镜头最低倍率均约 `0.051`。这是本次事件和请求的关联，不证明请求只用于这些场景。
+
+实际参数：三个常量倍率均为 `1.0`，`TimeDuration=1.0`，两个过渡值约 `0.1`，`Priority=16`，`IsShortSlow=1`；三个曲线字段引用同一 `CurveResource`。四个点的 `Position` 为 `(0, 0.051)`、`(0.45, 0.051)`、`(0.55, 1)`、`(1, 1)`，四点的 In／OutTangent 均为 `0`，In／OutTangentX 均为 `1`。当前 80 项参数表中，没有其他参数引用这条曲线。
+
+精确哈希字节搜索定位到 `DS2.exe+0x1089D8C`：
+
+```asm
+DS2.exe+0x1089D84  lea rdx, [rsp+0x90]
+DS2.exe+0x1089D8C  mov dword ptr [rsp+0x90], 0x6ED5275D
+DS2.exe+0x1089D97  call DS2.exe+0xD70FE0
+```
+
+所在过程入口 `DS2.exe+0x1089C20`，未恢复原名。上游读取两个计时对象，并在 `0x1089D3B` 与浮点常量 `2.0` 比较后决定是否到达请求路径；完整时间单位和其他状态条件尚未验证，不据此宣称冷却固定为 2 秒。原始反汇编：`build/analysis/bug-pickup-request-disasm.txt`，该过程已加入离线证据提取工具。
+
+原始参数与曲线：`build/analysis/cryptobiote-curves.json`。三轮采样及汇总使用 `cryptobiote-single-pickup`、`electric-bug-single-pickup`、`chiral-crystal-single-pickup` 文件名，位于 `build/analysis/`。
+
+### 0.4.0-test 独立开关及验证
+
+新增 `[Features] DisablePickupSlowMo=1`，与 `DisableHumanDefeatSlowMo` 独立。每项设 `0` 即跳过，缺省为 `1`，非法值仅停止该项。配置在启动时读取，重启生效。
+
+公共代码移至 `src/time_scale_patch.h`。原有人类敌人分支继续验证七点／八点曲线及既有参数；拾取分支验证 `0x6ED5275D`、标量设置、优先级、`IsShortSlow`、三个字段同指针、四个原始点及参数表内引用，然后只修改该共享曲线一次。保留请求、计时、优先级、标记和资源引用。一个分支校验失败不会阻止另一个已启用分支尝试应用。
+
+Release 编译通过 `/W4 /WX`。本地宿主验证全部关闭、只开启人类敌人、只开启拾取、非法值及缺省两项开启；宿主未进入游戏修改逻辑。旧版 ASI、INI、日志备份至 `build/rollback/pickup-20261014-123733/`。部署时保留原有人类敌人配置，追加拾取项，安装前后哈希核对；记录：`build/pickup-deployment.json`。
+
+真实游戏 PID `3108` 的 `0.4.0-test` 日志确认两个开关为 `1`、两个请求应用成功。独立读取 `build/analysis/patched-pickup-curves.json` 确认共享曲线四点和 `LowestPoint` 均为 `1.0`；`build/analysis/v04-human-defeat-curves.json` 确认原有世界七点、玩家八点仍全部为 `1.0`。
+
+修改后用户多次拾取隐生虫，反馈没有慢动作。`build/analysis/patched-cryptobiote-pickup.jsonl` 记录 11997 次、读取错误零次，仍出现 `0x6ED5275D`，三个当前倍率全程为 `1.0`。对应汇总为 `patched-cryptobiote-pickup-summary.json`。
+
+修改后的电气虫、晶体尚未逐项实测；请求的其他用途、重复拾取条件及资源重载后的应用情况仍待验证。两个实际游戏中的关闭分支尚未通过重启逐项采样，但本地加载已确认配置选择和跳过路径。
 
 ## 参考
 

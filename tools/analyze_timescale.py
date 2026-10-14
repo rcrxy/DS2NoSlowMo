@@ -214,6 +214,7 @@ def main():
     assert parameter_fields["IsForEnemyDefeatedWithCloseCombat"]["offset"] == 0x65
     assert parameter_fields["IsForEnemyDefeatedWithFarCombat"]["offset"] == 0x66
     roles = {
+        0x1089C20: "Contains immediate request Name 0x6ED5275D and calls the lookup function at RVA 0x1089D97",
         0x723740: "Registers SlowMotionManager::sExportedIsGameInSlowMotion with callback RVA 0x724530",
         0x7237E0: "Adds a request to the slow-motion manager array with stride 0x1c",
         0x723A70: "Changes the factors of an ID-selected slow-motion manager request",
