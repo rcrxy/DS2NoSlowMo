@@ -4,10 +4,11 @@
 #include <string>
 
 #include "time_scale_patch.h"
+#include "bt_vehicle_patch.h"
 
 namespace
 {
-    constexpr char PluginVersion[] = "0.4.0-test";
+    constexpr char PluginVersion[] = "0.5.0-test";
 
     bool ReadSwitch(const std::wstring &iniPath, HANDLE log, const wchar_t *key, bool &enabled)
     {
@@ -101,7 +102,7 @@ namespace
         const std::string message = std::string(header, headerLength) +
                                     "Process: " + Utf8(processPath) + "\r\nPlugin: " + Utf8(pluginPath) +
                                     "\r\nConfiguration file: " + Utf8(iniPath) +
-                                    "\r\nMode: configured human-defeat and pickup curve patches.\r\n";
+                                    "\r\nMode: configured slowdown curves and BT vehicle shutdown patch.\r\n";
         DWORD written = 0;
         const DWORD size = static_cast<DWORD>(message.size());
         const bool success = WriteFile(log, message.data(), size, &written, nullptr) &&
@@ -111,12 +112,15 @@ namespace
         {
             try
             {
-                bool humanDefeat = false, pickup = false;
+                bool humanDefeat = false, pickup = false, btVehicle = false;
                 const bool humanValid = ReadSwitch(iniPath, log, L"DisableHumanDefeatSlowMo", humanDefeat);
                 const bool pickupValid = ReadSwitch(iniPath, log, L"DisablePickupSlowMo", pickup);
+                const bool btVehicleValid = ReadSwitch(iniPath, log, L"DisableBTVehicleShutdown", btVehicle);
+                if (btVehicleValid && btVehicle)
+                    BTVehiclePatch::Run(processPath, log);
                 if ((humanValid && humanDefeat) || (pickupValid && pickup))
                     TimeScalePatch::Run(processPath, log, humanValid && humanDefeat, pickupValid && pickup);
-                else
+                else if (!(btVehicleValid && btVehicle))
                     TimeScalePatch::Log(log, "No enabled effects; game data unchanged.\r\n");
             }
             catch (...)

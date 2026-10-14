@@ -1,55 +1,76 @@
 # DS2NoSlowMo
 
-《死亡搁浅 2》慢动作修改项目。提供人类敌人击败与拾取慢动作的独立配置开关。
+《死亡搁浅 2》ASI Mod，用于取消人类敌人击杀／击昏后的慢动作、物品拾取慢动作，以及进入 BT 区时的载具强制停车。三项功能可独立配置。
 
-`0.2.0-test` 针对单次击倒实测对应的 `Name=0x4152CF0A`，将其世界及玩家倍率曲线改为恒定 `1.0`。修改后两次游戏内击昏测试均记录到该请求，已监测的倍率始终为 `1.0`；用户反馈操作延迟似乎消失，音效和镜头特效仍在。它保留原有请求和计时流程；不同击倒方式、重载资源及其他触发场景尚未验证。
+版本：`0.5.0-test` · 作者：`zeco` · 平台：Windows x64 / Steam
 
-用户后续清理区域及无 Mod 对照反馈：当前版明显改善击杀后 Sam 的移动受阻；原版有约 1～2 秒的时停体感，期间再次击杀会重置效果。这部分未同步采样，极短残留体感的来源仍未确认。遇敌时停暂不处理。
+## 功能
 
-当前版本 `0.4.0-test`。三轮单独采样确认隐生虫、电气虫、开罗尔晶体均使用 `Name=0x6ED5275D`，共用一条倍率曲线。拾取开关将该曲线设为恒定 `1.0`；修改后隐生虫多次拾取实测没有慢动作，采样倍率全程为 `1.0`，用户随后确认电气虫、晶体也生效。这两项修改后测试没有同步采样；其他场景是否使用此请求尚未排除。
+| 功能 | 效果 |
+| --- | --- |
+| 人类敌人击败 | 取消击杀／击昏后的倍率减速，改善 Sam 的移动响应 |
+| 物品拾取 | 取消拾取隐生虫、电气虫、开罗尔晶体时的倍率减速 |
+| BT 区载具 | 取消进入 BT 区时的强制熄火与操控中断，摩托车和卡车已实测通过 |
+
+减速取消后，原有音效与镜头反馈仍可能保留。BT 载具功能已验证奥卓德克正常播放。
+
+## 兼容范围
+
+当前支持已验证的 Steam 游戏构建 `1.10.89.0`。插件检查游戏文件及运行时数据；构建不匹配时停止对应修改并记录原因。其他版本、商店版本，以及修改相同资源或指令的 Mod 尚未验证。
+
+人类敌人发现 Sam 时的慢动作、大型 BT 击败效果和其他触发场景不属于本版的实现范围。测试覆盖见 [验证说明](docs/slow-motion-testing.md)。
+
+## 安装
+
+1. 完整退出游戏。
+2. 将 [Ultimate ASI Loader](https://github.com/ThirteenAG/Ultimate-ASI-Loader) 的 x64 `version.dll` 放到 `DS2.exe` 所在目录；已有可用 ASI Loader 时沿用现有配置。
+3. 将 `DS2NoSlowMo.asi` 和 [DS2NoSlowMo.ini](DS2NoSlowMo.ini) 放到同一目录。
+4. 通过 Steam 启动游戏。
+
+ASI Loader 需单独安装。插件启动后在 ASI 同目录生成 `DS2NoSlowMo.log`。
 
 ## 配置
 
-将 [DS2NoSlowMo.ini](DS2NoSlowMo.ini) 放在 `DS2NoSlowMo.asi` 同一目录：
+编辑 `DS2NoSlowMo.ini`：
 
 ```ini
 [Features]
 DisableHumanDefeatSlowMo=1
 DisablePickupSlowMo=1
+DisableBTVehicleShutdown=1
 ```
 
-- `DisableHumanDefeatSlowMo`：控制已验证的人类敌人击败请求。
-- `DisablePickupSlowMo`：控制三种拾取实测的共享请求。
-- 每项 `1` 为禁用该请求的倍率减速，`0` 为保留原效果；缺省均为 `1`。其他值会停止应用该项并记入日志，另一项独立读取。
+| 配置项 | 控制的功能 |
+| --- | --- |
+| `DisableHumanDefeatSlowMo` | 人类敌人击杀／击昏后的减速 |
+| `DisablePickupSlowMo` | 三种物品拾取的减速 |
+| `DisableBTVehicleShutdown` | BT 遭遇时的载具强停 |
 
-配置只在插件启动时读取，修改后需完整退出并重启游戏。两个开关不绑定。
+`1` 启用对应修改，`0` 保留原效果。缺省值均为 `1`，各项互不绑定。非法值只停用该项，并写入日志。
 
-## 开发
+**修改配置后需完整退出并重启游戏。**
 
-```powershell
-.\do_build.bat Debug
-.\do_build.bat Release
-```
+## 排查与卸载
 
-默认构建 Release。产物分别位于 `build/Debug/` 和 `build/Release/`。
-构建脚本自动查找已安装的 Visual Studio C++ 工具链。本机使用 VS2026；无需额外 Hook 库，SHA256 校验使用 Windows 系统的 BCrypt。
+| 日志前缀 | 含义 |
+| --- | --- |
+| `Applied:` | 对应修改已应用 |
+| `Skipped:` | 配置为 `0`，跳过该项 |
+| `Disabled:` | 校验或访问失败，未应用该项 |
 
-## 加载验证
+没有日志时，检查 ASI Loader 和安装目录。报告问题时请提供游戏版本、插件版本、配置、复现步骤及相关日志行。
 
-退出游戏，将构建出的 `DS2NoSlowMo.asi`、`DS2NoSlowMo.ini` 与 x64 ASI Loader 的 `version.dll` 放到 `DS2.exe` 同一目录，再通过 Steam 启动游戏。
+恢复单项原效果：将其配置设为 `0` 并重启。卸载：退出游戏后移除 `DS2NoSlowMo.asi` 和 `DS2NoSlowMo.ini`；生成的日志也可删除。其他 Mod 依赖的 ASI Loader 应保留。
 
-日志还会记录 PID、插件版本、进程路径和插件路径。核对这些信息后，才能确认加载到了实际游戏进程。
+## 开发文档
 
-测试版只有在游戏 SHA256、运行时代码、参数类型、曲线点数据及参数表内引用检查全部通过，且时间控制请求数组为空时才修改曲线。成功日志分别包含 `Applied: Name=0x4152CF0A` 和 `Applied: Name=0x6ED5275D`；`Skipped:` 表示配置关闭该项，`Disabled:` 表示校验失败等原因导致未成功应用。
+- [构建、调试与打包](docs/development.md)
+- [手动验证与只读采样](docs/slow-motion-testing.md)
+- [时间倍率功能实现](docs/time-scale-addresses.md)
+- [BT 载具功能实现](docs/bt-vehicle-investigation.md)
+- [发布包英文说明](docs/release-readme.md)
+- [N 网页面说明](docs/nexus-description.md)
 
-插件只修改进程内数据。退出游戏后替换回旧 ASI，或移走 `DS2NoSlowMo.asi`，可恢复原版行为。
+## 许可与致谢
 
-## 慢动作定位
-
-用户观察、实测结果和后续测试步骤见 [慢动作测试计划](docs/slow-motion-testing.md)。
-
-已定位的通用时间控制入口、运行时基线和只读诊断工具见 [时间控制定位记录](docs/time-scale-addresses.md)。
-
-## 项目内容
-
-本项目由 `plyrthn/ds2_sd_card_music_player` 启发而创建。
+采用 [MIT License](LICENSE)，作者为 zeco，保留原有版权声明。本项目由 `plyrthn/ds2_sd_card_music_player` 启发而创建；Ultimate ASI Loader 为独立项目。
