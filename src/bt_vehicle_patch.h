@@ -18,11 +18,8 @@ namespace BTVehiclePatch
 
     void Run(const std::wstring &processPath, HANDLE log)
     {
-        if (!TimeScalePatch::SupportedFile(processPath))
-        {
-            TimeScalePatch::Log(log, "Disabled: BT vehicle patch executable SHA256 is unsupported or unreadable.\r\n");
+        if (!TimeScalePatch::SupportedFile(processPath, log))
             return;
-        }
         const auto base = reinterpret_cast<std::uintptr_t>(GetModuleHandleW(nullptr));
         constexpr unsigned char entry[] = {0xC5, 0xFA, 0x11, 0x4C, 0x24, 0x10, 0x53, 0x48,
                                            0x83, 0xEC, 0x40, 0x80, 0x79, 0x3C, 0x00, 0x48};

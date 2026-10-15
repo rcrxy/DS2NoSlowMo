@@ -2,7 +2,7 @@
 
 ## 开发环境
 
-编译需要 Windows x64、Visual Studio C++ x64/x86 工具链及 Windows SDK。项目使用 C++17，不依赖额外 Hook 库；SHA256 校验调用 Windows BCrypt。
+编译需要 Windows x64、Visual Studio C++ x64/x86 工具链及 Windows SDK。项目使用 C++17，不依赖额外 Hook 库；游戏文件版本读取调用 Windows Version API，链接 `version.lib`。
 
 VS Code 配置采用以下已验证的本机环境：
 
@@ -51,9 +51,11 @@ INI 只在初始化时读取；替换 ASI 或修改开关后均需完整重启�
 | 文件 | 职责 |
 | --- | --- |
 | `src/ds2_no_slowmo.cpp` | DLL 入口、初始化线程、路径和日志、INI 开关 |
-| `src/time_scale_patch.h` | 游戏哈希校验、时间参数与曲线验证、两项倍率修改 |
+| `src/time_scale_patch.h` | 游戏最低文件版本校验、时间参数与曲线验证、两项倍率修改 |
 | `src/bt_vehicle_patch.h` | BT 载具分支校验、单字节指令修改、缓存刷新及页面保护恢复 |
 | `DS2NoSlowMo.ini` | 三项独立功能的默认配置 |
+| `third_party/ultimate-asi-loader/` | 随包分发的 x64 ASI Loader、上游许可及来源与 SHA256 记录 |
+| `tools/package_release.ps1` | 构建 Release、打包并核对 ZIP 内容及 SHA256 |
 | `tools/analyze_timescale.py` | 离线 PE、RTTI 与反汇编分析 |
 | `tools/probe_timescale.py` | 时间控制对象、参数与活动曲线的只读采样 |
 | `tools/probe_bt_vehicle.py` | BT 遭遇状态和资源的只读采样 |
@@ -81,25 +83,41 @@ python tools/analyze_timescale.py --game $ds2Executable --output build/analysis/
 
 输出包含 RTTI 字段、过程反汇编、入口字节、RVA 和展开信息。文件构建不匹配时工具停止分析。
 
+插件的最低 EXE 文件版本为 `1.10.89.0`，使用 `VS_FIXEDFILEINFO` 的四段数字比较，不再锁定完整文件哈希；版本读取失败或版本过低时停止修改。运行时指令、布局与曲线检查继续执行。开发用分析和只读采样工具仍锁定原始构建的 SHA256，其结果与文档地址仅针对已分析构建。
+
 ## 发布包
 
-发布包使用 Release ASI，并包含以下四个文件：
+在项目根目录执行：
+
+```powershell
+.\tools\package_release.ps1
+```
+
+脚本校验仓库内加载器的 SHA256，重新构建 Release ASI，从源码读取插件版本，生成 ZIP 并逐文件检查压缩包内的长度和 SHA256。打包过程中无需下载依赖。
+
+发布包包含以下六个文件，全部位于 ZIP 根目录：
 
 ```text
 DS2NoSlowMo.asi
 DS2NoSlowMo.ini
+version.dll
 README.md
 LICENSE
+LICENSE-Ultimate-ASI-Loader.txt
 ```
 
 包内 README 来自 [release-readme.md](release-readme.md)。[N 网页面说明](nexus-description.md) 用于发布页面，项目根 README 用于仓库。
 
+`version.dll` 存放在 `third_party/ultimate-asi-loader/`，不参与本项目编译。当前固定为 Ultimate ASI Loader `9.7.4` x64；同目录 `manifest.json` 记录上游版本、下载地址及 SHA256，`LICENSE` 保留该版本的上游 MIT 许可，打包时命名为 `LICENSE-Ultimate-ASI-Loader.txt`。更新依赖时应同步更新 DLL、许可和 manifest，再核对各安装说明中的版本。
+
+该 DLL 已与上游 `Ultimate-ASI-Loader_x64.zip` 中的 `dinput8.dll` 逐字节核对一致，仅改名为本项目安装使用的 `version.dll`。
+
 打包后检查：
 
 - ASI 与已验证的 Release 构建一致，版本与说明一致。
-- ZIP 中仅包含上述四个文件，文件可解压且内容完整。
-- INI 三个键名与源码一致，默认值均为 `1`。
-- 安装说明列出独立的 x64 ASI Loader 依赖。
-- LICENSE 中的作者和原有版权声明完整保留。
+- ZIP 中仅包含上述六个文件，文件可解压且内容完整。
+- INI 三个键名与源码一致，敌人击败和拾取默认值为 `1`，BT 载具默认值及省略值为 `0`。
+- 安装说明明确已附带 x64 ASI Loader，已有可用加载器时保留现有配置。
+- 本项目与 ASI Loader 各自的 MIT 许可、作者和原有版权声明完整保留。
 
-当前发布包位于 `build/releases/DS2NoSlowMo-0.5.0-test.zip`；同目录的 manifest 保存 ZIP 和各文件的 SHA256。只修改发布说明时更新 ZIP 与 manifest，无需重新编译 ASI。
+当前发布包位于 `build/releases/DS2NoSlowMo-0.5.0-test.zip`；同目录的 manifest 保存 ZIP 和各文件的 SHA256。修改发布说明后重新运行打包脚本，确保 ZIP、说明与 manifest 一致。

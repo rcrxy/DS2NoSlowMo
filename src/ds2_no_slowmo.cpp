@@ -10,10 +10,10 @@ namespace
 {
     constexpr char PluginVersion[] = "0.5.0-test";
 
-    bool ReadSwitch(const std::wstring &iniPath, HANDLE log, const wchar_t *key, bool &enabled)
+    bool ReadSwitch(const std::wstring &iniPath, HANDLE log, const wchar_t *key, bool defaultEnabled, bool &enabled)
     {
         wchar_t value[64]{};
-        const DWORD length = GetPrivateProfileStringW(L"Features", key, L"1",
+        const DWORD length = GetPrivateProfileStringW(L"Features", key, defaultEnabled ? L"1" : L"0",
                                                       value, ARRAYSIZE(value), iniPath.c_str());
         if (length != 1 || (value[0] != L'0' && value[0] != L'1'))
         {
@@ -21,7 +21,8 @@ namespace
             return false;
         }
         enabled = value[0] == L'1';
-        TimeScalePatch::Log(log, "Configuration: [Features] %ls=%d (default if omitted: 1).\r\n", key, enabled);
+        TimeScalePatch::Log(log, "Configuration: [Features] %ls=%d (default if omitted: %d).\r\n",
+                            key, enabled, defaultEnabled);
         if (!enabled)
             TimeScalePatch::Log(log, "Skipped: %ls=0; effect unchanged.\r\n", key);
         return true;
@@ -112,14 +113,14 @@ namespace
         {
             try
             {
-                bool humanDefeat = false, pickup = false, btVehicle = false;
-                const bool humanValid = ReadSwitch(iniPath, log, L"DisableHumanDefeatSlowMo", humanDefeat);
-                const bool pickupValid = ReadSwitch(iniPath, log, L"DisablePickupSlowMo", pickup);
-                const bool btVehicleValid = ReadSwitch(iniPath, log, L"DisableBTVehicleShutdown", btVehicle);
+                bool enemyDefeat = false, pickup = false, btVehicle = false;
+                const bool enemyValid = ReadSwitch(iniPath, log, L"DisableEnemyDefeatSlowMo", true, enemyDefeat);
+                const bool pickupValid = ReadSwitch(iniPath, log, L"DisablePickupSlowMo", true, pickup);
+                const bool btVehicleValid = ReadSwitch(iniPath, log, L"DisableBTVehicleShutdown", false, btVehicle);
                 if (btVehicleValid && btVehicle)
                     BTVehiclePatch::Run(processPath, log);
-                if ((humanValid && humanDefeat) || (pickupValid && pickup))
-                    TimeScalePatch::Run(processPath, log, humanValid && humanDefeat, pickupValid && pickup);
+                if ((enemyValid && enemyDefeat) || (pickupValid && pickup))
+                    TimeScalePatch::Run(processPath, log, enemyValid && enemyDefeat, pickupValid && pickup);
                 else if (!(btVehicleValid && btVehicle))
                     TimeScalePatch::Log(log, "No enabled effects; game data unchanged.\r\n");
             }

@@ -1,23 +1,23 @@
 #pragma once
 
-#include <bcrypt.h>
+#include <winver.h>
 #include <array>
 #include <cstdarg>
 #include <cstdint>
 #include <cstring>
 #include <vector>
 
-#pragma comment(lib, "bcrypt.lib")
+#pragma comment(lib, "version.lib")
 
 namespace TimeScalePatch
 {
-    enum class Effect { HumanDefeat, Pickup };
-    constexpr std::uint32_t HumanDefeatName = 0x4152CF0A;
+    enum class Effect { EnemyDefeat, Pickup };
+    constexpr std::uint32_t EnemyDefeatName = 0x4152CF0A;
     constexpr std::uint32_t PickupName = 0x6ED5275D;
 
     std::uint32_t Name(Effect effect)
     {
-        return effect == Effect::Pickup ? PickupName : HumanDefeatName;
+        return effect == Effect::Pickup ? PickupName : EnemyDefeatName;
     }
     constexpr std::uintptr_t ControllerSlot = 0x623E9A8;
     constexpr std::uintptr_t ParameterRTTI = 0xD708E0;
@@ -50,55 +50,47 @@ namespace TimeScalePatch
         return Read(address, &value, sizeof(value));
     }
 
-    bool SupportedFile(const std::wstring &path)
+    bool SupportedFile(const std::wstring &path, HANDLE log)
     {
-        constexpr unsigned char expected[] = {
-            0xBF, 0x3D, 0x1C, 0x66, 0x55, 0x45, 0x93, 0x0B, 0xC8, 0x50, 0xD8, 0xF5, 0xDF, 0x48, 0x6F, 0x73,
-            0x95, 0x88, 0x5B, 0xB7, 0x29, 0xD4, 0xFD, 0x40, 0x8F, 0xDB, 0x03, 0x39, 0x0D, 0xE0, 0x76, 0x5B};
-        std::array<unsigned char, 32> digest{};
-        BCRYPT_ALG_HANDLE algorithm = nullptr;
-        BCRYPT_HASH_HANDLE hash = nullptr;
-        HANDLE file = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
-                                  FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN, nullptr);
-        if (file == INVALID_HANDLE_VALUE)
-            return false;
-        bool success = false;
-        if (BCryptOpenAlgorithmProvider(&algorithm, BCRYPT_SHA256_ALGORITHM, nullptr, 0) >= 0)
+        DWORD ignored = 0;
+        const DWORD size = GetFileVersionInfoSizeW(path.c_str(), &ignored);
+        if (size == 0)
         {
-            DWORD size = 0, copied = 0;
-            if (BCryptGetProperty(algorithm, BCRYPT_OBJECT_LENGTH, reinterpret_cast<PUCHAR>(&size),
-                                  sizeof(size), &copied, 0) >= 0)
-            {
-                std::vector<unsigned char> object(size);
-                if (BCryptCreateHash(algorithm, &hash, object.data(), size, nullptr, 0, 0) >= 0)
-                {
-                    unsigned char buffer[65536];
-                    DWORD bytes = 0;
-                    success = true;
-                    for (;;)
-                    {
-                        if (!ReadFile(file, buffer, sizeof(buffer), &bytes, nullptr))
-                        {
-                            success = false;
-                            break;
-                        }
-                        if (bytes == 0)
-                            break;
-                        if (BCryptHashData(hash, buffer, bytes, 0) < 0)
-                        {
-                            success = false;
-                            break;
-                        }
-                    }
-                    success = success && BCryptFinishHash(hash, digest.data(), static_cast<ULONG>(digest.size()), 0) >= 0;
-                    BCryptDestroyHash(hash);
-                    hash = nullptr;
-                }
-            }
-            BCryptCloseAlgorithmProvider(algorithm, 0);
+            Log(log, "Disabled: cannot read executable file version (error=%lu).\r\n", GetLastError());
+            return false;
         }
-        CloseHandle(file);
-        return success && std::memcmp(digest.data(), expected, sizeof(expected)) == 0;
+        std::vector<unsigned char> data(size);
+        if (!GetFileVersionInfoW(path.c_str(), 0, size, data.data()))
+        {
+            Log(log, "Disabled: cannot load executable version data (error=%lu).\r\n", GetLastError());
+            return false;
+        }
+        void *value = nullptr;
+        UINT length = 0;
+        if (!VerQueryValueW(data.data(), L"\\", &value, &length) ||
+            value == nullptr || length < sizeof(VS_FIXEDFILEINFO))
+        {
+            Log(log, "Disabled: executable fixed file version is missing or invalid.\r\n");
+            return false;
+        }
+        const auto &version = *static_cast<const VS_FIXEDFILEINFO *>(value);
+        if (version.dwSignature != VS_FFI_SIGNATURE)
+        {
+            Log(log, "Disabled: executable fixed file version signature is invalid.\r\n");
+            return false;
+        }
+        constexpr std::uint64_t minimumVersion =
+            (std::uint64_t{1} << 48) | (std::uint64_t{10} << 32) | (std::uint64_t{89} << 16);
+        const std::uint64_t actualVersion =
+            (static_cast<std::uint64_t>(version.dwFileVersionMS) << 32) | version.dwFileVersionLS;
+        const bool supported = actualVersion >= minimumVersion;
+        Log(log, "%s: executable file version %u.%u.%u.%u; minimum required: 1.10.89.0.\r\n",
+            supported ? "Version accepted" : "Disabled",
+            static_cast<unsigned int>(HIWORD(version.dwFileVersionMS)),
+            static_cast<unsigned int>(LOWORD(version.dwFileVersionMS)),
+            static_cast<unsigned int>(HIWORD(version.dwFileVersionLS)),
+            static_cast<unsigned int>(LOWORD(version.dwFileVersionLS)));
+        return supported;
     }
 
     struct ArrayHeader
@@ -271,13 +263,10 @@ namespace TimeScalePatch
         return 1;
     }
 
-    void Run(const std::wstring &processPath, HANDLE log, bool humanDefeat, bool pickup)
+    void Run(const std::wstring &processPath, HANDLE log, bool enemyDefeat, bool pickup)
     {
-        if (!SupportedFile(processPath))
-        {
-            Log(log, "Disabled: executable SHA256 is unsupported or could not be read.\r\n");
+        if (!SupportedFile(processPath, log))
             return;
-        }
         const auto base = reinterpret_cast<std::uintptr_t>(GetModuleHandleW(nullptr));
         const unsigned char expected[] = {0x48, 0x89, 0x5C, 0x24, 0x08, 0x48, 0x89, 0x7C,
                                           0x24, 0x10, 0x55, 0x48, 0x8D, 0x6C, 0x24, 0xB1};
@@ -288,8 +277,8 @@ namespace TimeScalePatch
             return;
         }
         Log(log, "Waiting for enabled parameters and an idle request array (up to 10 minutes).\r\n");
-        const std::array<Effect, 2> effects{Effect::HumanDefeat, Effect::Pickup};
-        std::array<bool, 2> pending{humanDefeat, pickup};
+        const std::array<Effect, 2> effects{Effect::EnemyDefeat, Effect::Pickup};
+        std::array<bool, 2> pending{enemyDefeat, pickup};
         for (unsigned int attempt = 0; attempt < 1200; ++attempt)
         {
             for (size_t i = 0; i < effects.size(); ++i)
