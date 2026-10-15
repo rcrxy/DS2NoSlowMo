@@ -68,4 +68,4 @@ Author: **zeco**. MIT License, including original copyright notices. Inspired by
 
 ## File description
 
-0.5.0-test — Independent options for enemy-defeat slowdown, pickup slowdown and BT-area vehicle shutdown (disabled by default). Includes the ASI, INI, Ultimate ASI Loader 9.7.4 x64, installation guide and both MIT license files. No separate loader download required.
+0.5.1 — Independent options for enemy-defeat slowdown, pickup slowdown and BT-area vehicle shutdown (disabled by default). Includes the ASI, INI, Ultimate ASI Loader 9.7.4 x64, installation guide and both MIT license files. No separate loader download required.

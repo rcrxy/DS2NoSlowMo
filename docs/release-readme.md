@@ -1,6 +1,6 @@
 # DS2NoSlowMo
 
-**Version:** 0.5.0-test · **Author:** zeco
+**Version:** 0.5.1 · **Author:** zeco
 
 **Game:** DEATH STRANDING 2: ON THE BEACH · Windows x64 / Steam
 

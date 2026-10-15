@@ -8,7 +8,7 @@
 
 namespace
 {
-    constexpr char PluginVersion[] = "0.5.0-test";
+    constexpr char PluginVersion[] = "0.5.1";
 
     bool ReadSwitch(const std::wstring &iniPath, HANDLE log, const wchar_t *key, bool defaultEnabled, bool &enabled)
     {

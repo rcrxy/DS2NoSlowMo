@@ -120,4 +120,4 @@ LICENSE-Ultimate-ASI-Loader.txt
 - 安装说明明确已附带 x64 ASI Loader，已有可用加载器时保留现有配置。
 - 本项目与 ASI Loader 各自的 MIT 许可、作者和原有版权声明完整保留。
 
-当前发布包位于 `build/releases/DS2NoSlowMo-0.5.0-test.zip`；同目录的 manifest 保存 ZIP 和各文件的 SHA256。修改发布说明后重新运行打包脚本，确保 ZIP、说明与 manifest 一致。
+当前发布包位于 `build/releases/DS2NoSlowMo-0.5.1.zip`；同目录的 manifest 保存 ZIP 和各文件的 SHA256。修改发布说明后重新运行打包脚本，确保 ZIP、说明与 manifest 一致。
