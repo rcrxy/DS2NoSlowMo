@@ -8,7 +8,7 @@
 
 namespace
 {
-    constexpr char PluginVersion[] = "0.5.1";
+    constexpr char PluginVersion[] = "0.6.0";
 
     bool ReadSwitch(const std::wstring &iniPath, HANDLE log, const wchar_t *key, bool defaultEnabled, bool &enabled)
     {
@@ -113,14 +113,16 @@ namespace
         {
             try
             {
-                bool enemyDefeat = false, pickup = false, btVehicle = false;
+                bool enemyDefeat = false, pickup = false, btVehicle = false, detection = false;
                 const bool enemyValid = ReadSwitch(iniPath, log, L"DisableEnemyDefeatSlowMo", true, enemyDefeat);
                 const bool pickupValid = ReadSwitch(iniPath, log, L"DisablePickupSlowMo", true, pickup);
                 const bool btVehicleValid = ReadSwitch(iniPath, log, L"DisableBTVehicleShutdown", false, btVehicle);
+                const bool detectionValid = ReadSwitch(iniPath, log, L"DisableDetectionSlowMo", false, detection);
                 if (btVehicleValid && btVehicle)
                     BTVehiclePatch::Run(processPath, log);
-                if ((enemyValid && enemyDefeat) || (pickupValid && pickup))
-                    TimeScalePatch::Run(processPath, log, enemyValid && enemyDefeat, pickupValid && pickup);
+                if ((enemyValid && enemyDefeat) || (pickupValid && pickup) || (detectionValid && detection))
+                    TimeScalePatch::Run(processPath, log, enemyValid && enemyDefeat, pickupValid && pickup,
+                                        detectionValid && detection);
                 else if (!(btVehicleValid && btVehicle))
                     TimeScalePatch::Log(log, "No enabled effects; game data unchanged.\r\n");
             }

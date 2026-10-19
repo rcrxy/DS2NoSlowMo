@@ -1,8 +1,8 @@
 # DS2NoSlowMo
 
-《死亡搁浅 2》ASI Mod，用于取消敌人击败后的慢动作、物品拾取慢动作，以及进入 BT 区时的载具强制停车。三项功能可独立配置，BT 载具功能默认关闭。
+《死亡搁浅 2》ASI Mod，用于取消敌人击败、物品拾取和被发现时的慢动作，以及进入 BT 区时的载具强制停车。四项功能可独立配置，被发现和 BT 载具功能默认关闭。
 
-版本：`0.5.1` · 作者：`zeco` · 平台：Windows x64 / Steam
+版本：`0.6.0` · 作者：`zeco` · 平台：Windows x64 / Steam
 
 ## 功能
 
@@ -10,6 +10,7 @@
 | --- | --- |
 | 敌人击败 | 取消击败后的倍率减速，适用于已实测的人类和机器类敌人，改善 Sam 的移动响应 |
 | 物品拾取 | 取消拾取隐生虫、电气虫、开罗尔晶体时的倍率减速 |
+| 被发现 | 取消已采样请求的倍率变化，默认关闭；人类敌人场景已由用户实测反馈基本正常 |
 | BT 区载具 | 取消进入 BT 区时的强制熄火与操控中断，摩托车和卡车已实测通过 |
 
 减速取消后，原有音效与镜头反馈仍可能保留。BT 载具功能已验证奥卓德克正常播放。
@@ -20,7 +21,7 @@
 
 运行时指令、数据布局和曲线校验仍会执行，不匹配时停止对应修改。更高版本能通过版本检查，不代表已经验证兼容；其他商店版本，以及修改相同资源或指令的 Mod 尚未验证。
 
-人类敌人发现 Sam 时的慢动作、大型 BT 击败效果和其他触发场景不属于本版的实现范围。测试覆盖见 [验证说明](docs/slow-motion-testing.md)。
+被发现选项当前仅覆盖已在人类单敌场景采样的请求，其他发现条件、机器和 BT 场景尚未验证。大型 BT 击败效果和其他触发场景不属于本版的实现范围。测试覆盖见 [验证说明](docs/slow-motion-testing.md)。
 
 ## 安装
 
@@ -39,6 +40,7 @@
 [Features]
 DisableEnemyDefeatSlowMo=1
 DisablePickupSlowMo=1
+DisableDetectionSlowMo=0
 DisableBTVehicleShutdown=0
 ```
 
@@ -46,9 +48,10 @@ DisableBTVehicleShutdown=0
 | --- | --- |
 | `DisableEnemyDefeatSlowMo` | 敌人击败后的减速（人类、机器类） |
 | `DisablePickupSlowMo` | 三种物品拾取的减速 |
+| `DisableDetectionSlowMo` | 被发现时已采样请求的减速／加速，默认关闭 |
 | `DisableBTVehicleShutdown` | BT 遭遇时的载具强停 |
 
-`1` 启用对应修改，`0` 保留原效果。敌人击败和拾取两项缺省为 `1`；`DisableBTVehicleShutdown` 缺省为 `0`，保留游戏原有机制，各项互不绑定。非法值只停用该项，并写入日志。
+`1` 启用对应修改，`0` 保留原效果。敌人击败和拾取两项缺省为 `1`；`DisableDetectionSlowMo` 和 `DisableBTVehicleShutdown` 缺省为 `0`，各项互不绑定。非法值只停用该项，并写入日志。
 
 `DisableHumanDefeatSlowMo` 已更名为 `DisableEnemyDefeatSlowMo`，已有配置需更新键名。
 

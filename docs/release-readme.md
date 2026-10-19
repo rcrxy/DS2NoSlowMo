@@ -1,17 +1,18 @@
 # DS2NoSlowMo
 
-**Version:** 0.5.1 · **Author:** zeco
+**Version:** 0.6.0 · **Author:** zeco
 
 **Game:** DEATH STRANDING 2: ON THE BEACH · Windows x64 / Steam
 
 ## Features
 
-Three independent INI options:
+Four independent INI options:
 
 | Option | Effect |
 | --- | --- |
 | Enemy defeat | Disable slowdown after defeating enemies; tested with human and machine enemies |
 | Pickups | Disable pickup slowdown for cryptobiotes, electric bugs and chiral crystals |
+| Detection | Disable the sampled detection request's time-scale changes (disabled by default; user-tested in a human-enemy encounter) |
 | BT vehicles | Prevent forced vehicle shutdown and loss of control when entering a BT area (disabled by default) |
 
 Sounds and camera feedback can remain after the slowdown is removed. Vehicle behavior has been tested with a three-wheeled cruiser motorcycle and a truck; the Odradek sequence works normally.
@@ -22,7 +23,7 @@ Minimum executable file version: **1.10.89.0**. Tested Steam build: **1.10.89.0*
 
 Runtime instruction, data-layout and curve checks remain in place; a mismatch prevents the corresponding modification. Passing the minimum-version check does not confirm compatibility with a newer build.
 
-Other game builds, stores and mods editing the same data or instructions have not been verified. Human-detection slowdown, large-BT defeat effects and other triggers are outside the implemented scope of this release; their behavior under all option combinations has not been verified.
+Other game builds, stores and mods editing the same data or instructions have not been verified. The detection option targets a request identified in a single human-enemy encounter; other detection conditions, machine enemies and BTs have not been verified. Large-BT defeat effects and other triggers are outside the implemented scope of this release.
 
 Vehicle sampling used the encounter-animation setting that plays only the first time. Other settings and other vehicle interruption events have not been tested.
 
@@ -43,6 +44,7 @@ Edit `DS2NoSlowMo.ini`:
 [Features]
 DisableEnemyDefeatSlowMo=1
 DisablePickupSlowMo=1
+DisableDetectionSlowMo=0
 DisableBTVehicleShutdown=0
 ```
 
@@ -50,9 +52,10 @@ DisableBTVehicleShutdown=0
 | --- | --- |
 | `DisableEnemyDefeatSlowMo` | Enemy-defeat slowdown (human and machine enemies) |
 | `DisablePickupSlowMo` | Pickup slowdown |
+| `DisableDetectionSlowMo` | Sampled detection slowdown and speed-up (disabled by default) |
 | `DisableBTVehicleShutdown` | BT-area vehicle shutdown |
 
-`1` enables the modification; `0` keeps the original behavior. Enemy-defeat and pickup options default to `1`; `DisableBTVehicleShutdown` defaults to `0`, preserving the original game mechanic. These defaults also apply when an option is omitted. All options work independently. An invalid value disables only that option and is logged.
+`1` enables the modification; `0` keeps the original behavior. Enemy-defeat and pickup options default to `1`; `DisableDetectionSlowMo` and `DisableBTVehicleShutdown` default to `0`. These defaults also apply when an option is omitted. All options work independently. An invalid value disables only that option and is logged.
 
 `DisableHumanDefeatSlowMo` has been renamed to `DisableEnemyDefeatSlowMo`. Update the key in existing INI files.
 

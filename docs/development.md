@@ -51,9 +51,9 @@ INI 只在初始化时读取；替换 ASI 或修改开关后均需完整重启�
 | 文件 | 职责 |
 | --- | --- |
 | `src/ds2_no_slowmo.cpp` | DLL 入口、初始化线程、路径和日志、INI 开关 |
-| `src/time_scale_patch.h` | 游戏最低文件版本校验、时间参数与曲线验证、两项倍率修改 |
+| `src/time_scale_patch.h` | 游戏最低文件版本校验、时间参数与曲线验证、三项倍率修改 |
 | `src/bt_vehicle_patch.h` | BT 载具分支校验、单字节指令修改、缓存刷新及页面保护恢复 |
-| `DS2NoSlowMo.ini` | 三项独立功能的默认配置 |
+| `DS2NoSlowMo.ini` | 四项独立功能的默认配置 |
 | `third_party/ultimate-asi-loader/` | 随包分发的 x64 ASI Loader、上游许可及来源与 SHA256 记录 |
 | `tools/package_release.ps1` | 构建 Release、打包并核对 ZIP 内容及 SHA256 |
 | `tools/analyze_timescale.py` | 离线 PE、RTTI 与反汇编分析 |
@@ -116,8 +116,8 @@ LICENSE-Ultimate-ASI-Loader.txt
 
 - ASI 与已验证的 Release 构建一致，版本与说明一致。
 - ZIP 中仅包含上述六个文件，文件可解压且内容完整。
-- INI 三个键名与源码一致，敌人击败和拾取默认值为 `1`，BT 载具默认值及省略值为 `0`。
+- INI 四个键名与源码一致，敌人击败和拾取默认值为 `1`，被发现和 BT 载具默认值及省略值为 `0`。
 - 安装说明明确已附带 x64 ASI Loader，已有可用加载器时保留现有配置。
 - 本项目与 ASI Loader 各自的 MIT 许可、作者和原有版权声明完整保留。
 
-当前发布包位于 `build/releases/DS2NoSlowMo-0.5.1.zip`；同目录的 manifest 保存 ZIP 和各文件的 SHA256。修改发布说明后重新运行打包脚本，确保 ZIP、说明与 manifest 一致。
+当前发布包位于 `build/releases/DS2NoSlowMo-0.6.0.zip`；同目录的 manifest 保存 ZIP 和各文件的 SHA256。修改发布说明后重新运行打包脚本，确保 ZIP、说明与 manifest 一致。

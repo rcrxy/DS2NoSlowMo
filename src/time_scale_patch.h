@@ -11,12 +11,16 @@
 
 namespace TimeScalePatch
 {
-    enum class Effect { EnemyDefeat, Pickup };
+    enum class Effect { EnemyDefeat, Pickup, Detection };
     constexpr std::uint32_t EnemyDefeatName = 0x4152CF0A;
     constexpr std::uint32_t PickupName = 0x6ED5275D;
+    constexpr std::uint32_t DetectionName = 0x7E03B479;
+    constexpr float DetectionEndTangent = -0x1.f49486p-11f; // Sampled float bits: 0xBA7A4A43.
 
     std::uint32_t Name(Effect effect)
     {
+        if (effect == Effect::Detection)
+            return DetectionName;
         return effect == Effect::Pickup ? PickupName : EnemyDefeatName;
     }
     constexpr std::uintptr_t ControllerSlot = 0x623E9A8;
@@ -113,10 +117,12 @@ namespace TimeScalePatch
         ArrayHeader array;
         std::vector<CurvePoint> points;
         float originalLowest;
+        float originalHighest;
     };
 
     bool PrepareCurve(std::uintptr_t base, std::uintptr_t address,
-                      const std::vector<std::array<float, 2>> &expected, CurveEdit &edit)
+                      const std::vector<std::array<float, 2>> &expected, CurveEdit &edit,
+                      float endTangent = 0.0f)
     {
         std::uintptr_t vtable = 0, getter = 0;
         if (!Read(address, vtable) || !Read(vtable, getter) || getter != base + CurveRTTI)
@@ -125,15 +131,16 @@ namespace TimeScalePatch
         if (!Read(address + 0x20, header) || header.count != static_cast<std::int32_t>(expected.size()) ||
             header.capacity < header.count || header.capacity > 4096 || header.data == 0)
             return false;
-        edit = {address, header, std::vector<CurvePoint>(expected.size()), 0.0f};
+        edit = {address, header, std::vector<CurvePoint>(expected.size()), 0.0f, 0.0f};
         if (!Read(header.data, edit.points.data(), edit.points.size() * sizeof(CurvePoint)) ||
-            !Read(address + 0x38, edit.originalLowest))
+            !Read(address + 0x38, edit.originalLowest) || !Read(address + 0x34, edit.originalHighest))
             return false;
         for (size_t i = 0; i < expected.size(); ++i)
         {
             const auto &point = edit.points[i];
+            const float tangent = i + 1 == expected.size() ? endTangent : 0.0f;
             if (point.x != expected[i][0] || point.y != expected[i][1] ||
-                point.inTangent != 0.0f || point.outTangent != 0.0f ||
+                point.inTangent != tangent || point.outTangent != tangent ||
                 point.inTangentX != 1.0f || point.outTangentX != 1.0f)
                 return false;
         }
@@ -155,12 +162,23 @@ namespace TimeScalePatch
                Read(address, actual) && actual == value;
     }
 
-    bool ApplyCurve(const CurveEdit &edit, bool restore)
+    bool ApplyCurve(const CurveEdit &edit, bool restore, bool flattenTangents = false)
     {
         bool success = true;
         for (size_t i = 0; i < edit.points.size(); ++i)
+        {
             success = WriteFloat(edit.array.data + i * sizeof(CurvePoint) + 4,
                                  restore ? edit.points[i].y : 1.0f) && success;
+            if (flattenTangents)
+            {
+                success = WriteFloat(edit.array.data + i * sizeof(CurvePoint) + 8,
+                                     restore ? edit.points[i].inTangent : 0.0f) && success;
+                success = WriteFloat(edit.array.data + i * sizeof(CurvePoint) + 12,
+                                     restore ? edit.points[i].outTangent : 0.0f) && success;
+            }
+        }
+        if (flattenTangents)
+            success = WriteFloat(edit.address + 0x34, restore ? edit.originalHighest : 1.0f) && success;
         return WriteFloat(edit.address + 0x38, restore ? edit.originalLowest : 1.0f) && success;
     }
 
@@ -168,6 +186,7 @@ namespace TimeScalePatch
     int TryApply(std::uintptr_t base, HANDLE log, Effect effect)
     {
         const bool pickup = effect == Effect::Pickup;
+        const bool detection = effect == Effect::Detection;
         const auto targetName = Name(effect);
         std::uintptr_t controller = 0;
         if (!Read(base + ControllerSlot, controller) || !controller)
@@ -206,13 +225,19 @@ namespace TimeScalePatch
         unsigned char shortSlow = 0;
         if (!Read(target, vtable) || !Read(vtable, getter) || getter != base + ParameterRTTI ||
             !Read(target + 0x24, settings) || !Read(target + 0x60, priority) ||
-            !Read(target + 0x68, shortSlow) || priority != (pickup ? 16u : 17u) ||
+            !Read(target + 0x68, shortSlow) || priority != (pickup || detection ? 16u : 17u) ||
             shortSlow != (pickup ? 1 : 0) ||
-            settings != std::array<float, 6>{1.0f, 1.0f, 1.0f, pickup ? 1.0f : 1.75f, 0.1f, 0.1f} ||
+            settings != std::array<float, 6>{1.0f, 1.0f, 1.0f, pickup ? 1.0f : detection ? 1.5f : 1.75f, 0.1f, 0.1f} ||
             !curves[0] || !curves[1] ||
             (pickup ? (curves[0] != curves[1] || curves[0] != curves[2])
                     : (curves[0] == curves[1] || curves[2] != 0)))
             return -1;
+        if (detection)
+        {
+            std::array<unsigned char, 5> flags{};
+            if (!Read(target + 0x64, flags) || flags != std::array<unsigned char, 5>{0, 0, 0, 1, 0})
+                return -1;
+        }
         for (auto pointer : parameters)
         {
             if (pointer == target)
@@ -231,6 +256,23 @@ namespace TimeScalePatch
             if (!PrepareCurve(base, curves[0], {{0, 0.051f}, {0.45f, 0.051f}, {0.55f, 1}, {1, 1}}, edits[0]))
                 return -1;
         }
+        else if (detection)
+        {
+            if (!PrepareCurve(base, curves[0], {{0, 1}, {0.1f, 1}, {0.3f, 0.1f}, {2.9f, 0.1f}, {3, 1}},
+                              edits[0], DetectionEndTangent) ||
+                !PrepareCurve(base, curves[1], {{0, 1}, {0.1f, 1.5f}, {0.5f, 0.3f}, {0.7f, 0.5f},
+                                               {1, 0.5f}, {2.1f, 0.2f}, {2.3f, 0.2f}, {2.9f, 0.5f}, {3, 1}},
+                              edits[1], DetectionEndTangent) ||
+                edits[0].originalLowest != 0.1f || edits[0].originalHighest != 1.0f ||
+                edits[1].originalLowest != 0.2f || edits[1].originalHighest != 1.5f)
+                return -1;
+            for (const auto &edit : edits)
+            {
+                std::array<unsigned char, 3> curveSettings{};
+                if (!Read(edit.address + 0x30, curveSettings) || curveSettings != std::array<unsigned char, 3>{})
+                    return -1;
+            }
+        }
         else if (!PrepareCurve(base, curves[0], {{0, 1}, {0.11f, 1}, {0.2f, 0.051f}, {0.7f, 0.051f},
                                                {1.1f, 0.3f}, {1.785f, 0.051f}, {1.8f, 0.051f}}, edits[0]) ||
                  !PrepareCurve(base, curves[1], {{0, 1}, {0.11f, 1}, {0.2f, 0.25f}, {0.75f, 0.25f},
@@ -245,7 +287,7 @@ namespace TimeScalePatch
         bool applied = true;
         for (const auto &edit : edits)
         {
-            if (!ApplyCurve(edit, false))
+            if (!ApplyCurve(edit, false, detection))
             {
                 applied = false;
                 break;
@@ -255,15 +297,17 @@ namespace TimeScalePatch
         {
             bool restored = true;
             for (const auto &edit : edits)
-                restored = ApplyCurve(edit, true) && restored;
+                restored = ApplyCurve(edit, true, detection) && restored;
             Log(log, "Patch write failed: Name=0x%08X; rollback=%d.\r\n", targetName, restored);
             return -1;
         }
         Log(log, "Applied: Name=0x%08X; %zu curve(s); all Y=1.0.\r\n", targetName, edits.size());
+        if (detection)
+            Log(log, "Applied: detection curve tangents=0; HighestPoint=LowestPoint=1.0.\r\n");
         return 1;
     }
 
-    void Run(const std::wstring &processPath, HANDLE log, bool enemyDefeat, bool pickup)
+    void Run(const std::wstring &processPath, HANDLE log, bool enemyDefeat, bool pickup, bool detection)
     {
         if (!SupportedFile(processPath, log))
             return;
@@ -277,8 +321,8 @@ namespace TimeScalePatch
             return;
         }
         Log(log, "Waiting for enabled parameters and an idle request array (up to 10 minutes).\r\n");
-        const std::array<Effect, 2> effects{Effect::EnemyDefeat, Effect::Pickup};
-        std::array<bool, 2> pending{enemyDefeat, pickup};
+        const std::array<Effect, 3> effects{Effect::EnemyDefeat, Effect::Pickup, Effect::Detection};
+        std::array<bool, 3> pending{enemyDefeat, pickup, detection};
         for (unsigned int attempt = 0; attempt < 1200; ++attempt)
         {
             for (size_t i = 0; i < effects.size(); ++i)
@@ -292,7 +336,7 @@ namespace TimeScalePatch
                 if (result < 0)
                     Log(log, "Disabled: Name=0x%08X parameter/curve validation or memory access failed.\r\n", Name(effects[i]));
             }
-            if (!pending[0] && !pending[1])
+            if (!pending[0] && !pending[1] && !pending[2])
                 return;
             Sleep(500);
         }
