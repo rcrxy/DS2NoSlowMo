@@ -42,6 +42,9 @@ DisableEnemyDefeatSlowMo=1
 DisablePickupSlowMo=1
 DisableDetectionSlowMo=0
 DisableBTVehicleShutdown=0
+
+[Logging]
+EnableLogging=0
 ```
 
 The settings control enemy-defeat slowdown, pickup slowdown, detection time-scale changes and BT-area vehicle shutdown, respectively.
@@ -58,7 +61,7 @@ The detection option targets a request identified in a single human-enemy encoun
 
 ### Troubleshooting and removal
 
-In `DS2NoSlowMo.log`, `Applied:` means the modification was applied, `Skipped:` means an option is disabled, and `Disabled:` means validation or access failed. If the plugin cannot create or write the file, it continues initialization and sends diagnostics to Windows debug output.
+Logging is off by default. Set `EnableLogging=1` under `[Logging]` and restart the game to write `DS2NoSlowMo.log` beside the ASI. `Applied:` means the modification was applied, `Skipped:` means an option is disabled, and `Disabled:` means validation or access failed. If the plugin cannot create or write the file, it continues initialization and sends diagnostics to Windows debug output.
 
 To uninstall, exit the game and remove the ASI and INI. Remove the bundled `version.dll` only if you installed it for this mod and no other mods need it.
 
@@ -70,4 +73,4 @@ Author: **zeco**. MIT License, including original copyright notices. Inspired by
 
 ## File description
 
-0.6.1 continues plugin initialization when the log file cannot be created or written and sends diagnostics to Windows debug output in that case. Includes the ASI, INI, Ultimate ASI Loader 9.7.4 x64, installation guide and both MIT license files.
+0.6.2 ships with logging off by default. When enabled, logging falls back to Windows debug output if the file cannot be created or written. Includes the ASI, INI, Ultimate ASI Loader 9.7.4 x64, installation guide and both MIT license files.

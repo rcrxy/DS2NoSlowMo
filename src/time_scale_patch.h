@@ -29,6 +29,9 @@ namespace TimeScalePatch
 
     void WriteLog(HANDLE &file, const char *message, DWORD length)
     {
+        // A null handle disables logging. An invalid handle uses debug output.
+        if (file == nullptr)
+            return;
         if (file != INVALID_HANDLE_VALUE)
         {
             DWORD written = 0;
@@ -45,6 +48,8 @@ namespace TimeScalePatch
 
     void Log(HANDLE &file, const char *format, ...)
     {
+        if (file == nullptr)
+            return;
         char buffer[512];
         va_list args;
         va_start(args, format);

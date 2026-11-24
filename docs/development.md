@@ -39,7 +39,7 @@ VS Code 中可使用任务 `Build ASI (Debug)` 或 `Build ASI (Release)`。默�
 
 1. 完整退出游戏。
 2. 将构建出的 ASI 和 INI 放到 `DS2.exe` 所在目录，按 [安装说明](../README.md#安装) 配置 ASI Loader。
-3. 通过 Steam 启动游戏，检查新生成的日志。
+3. 在 INI 的 `[Logging]` 段设置 `EnableLogging=1`，通过 Steam 启动游戏并检查新生成的日志。
 4. 调试时使用 Debug ASI，在 VS Code 选择 `Attach to DS2 (Debug ASI)`，通过进程选择器选中实际游戏进程。
 
 调试配置从 `build/Debug` 查找符号，并要求源码匹配。附加调试器不等于插件加载成功，加载结果应以日志和运行时检查为准。
@@ -120,4 +120,4 @@ LICENSE-Ultimate-ASI-Loader.txt
 - 安装说明明确已附带 x64 ASI Loader，已有可用加载器时保留现有配置。
 - 本项目与 ASI Loader 各自的 MIT 许可、作者和原有版权声明完整保留。
 
-当前发布包位于 `build/releases/DS2NoSlowMo-0.6.1.zip`，同目录的 manifest 保存 ZIP 和各文件的 SHA256。修改发布说明后重新运行打包脚本，确保 ZIP、说明与 manifest 一致。
+当前发布包位于 `build/releases/DS2NoSlowMo-0.6.2.zip`，同目录的 manifest 保存 ZIP 和各文件的 SHA256。修改发布说明后重新运行打包脚本，确保 ZIP、说明与 manifest 一致。

@@ -8,19 +8,27 @@
 
 namespace
 {
-    constexpr char PluginVersion[] = "0.6.1";
+    constexpr char PluginVersion[] = "0.6.2";
+
+    bool TryReadSwitch(const std::wstring &iniPath, const wchar_t *section, const wchar_t *key,
+                       bool defaultEnabled, bool &enabled)
+    {
+        wchar_t value[64]{};
+        const DWORD length = GetPrivateProfileStringW(section, key, defaultEnabled ? L"1" : L"0",
+                                                      value, ARRAYSIZE(value), iniPath.c_str());
+        if (length != 1 || (value[0] != L'0' && value[0] != L'1'))
+            return false;
+        enabled = value[0] == L'1';
+        return true;
+    }
 
     bool ReadSwitch(const std::wstring &iniPath, HANDLE &log, const wchar_t *key, bool defaultEnabled, bool &enabled)
     {
-        wchar_t value[64]{};
-        const DWORD length = GetPrivateProfileStringW(L"Features", key, defaultEnabled ? L"1" : L"0",
-                                                      value, ARRAYSIZE(value), iniPath.c_str());
-        if (length != 1 || (value[0] != L'0' && value[0] != L'1'))
+        if (!TryReadSwitch(iniPath, L"Features", key, defaultEnabled, enabled))
         {
             TimeScalePatch::Log(log, "Disabled: [Features] %ls must be 0 or 1.\r\n", key);
             return false;
         }
-        enabled = value[0] == L'1';
         TimeScalePatch::Log(log, "Configuration: [Features] %ls=%d (default if omitted: %d).\r\n",
                             key, enabled, defaultEnabled);
         if (!enabled)
@@ -88,10 +96,7 @@ namespace
         const auto pluginSeparator = pluginPath.find_last_of(L'\\');
         if (processSeparator == std::wstring::npos ||
             pluginSeparator == std::wstring::npos)
-        {
-            OutputDebugStringA("DS2NoSlowMo: cannot read module paths.\n");
             return 1;
-        }
         // The loader may also load ASIs into the game's helper processes.
         if (processPath.substr(processSeparator + 1) != L"DS2.exe")
         {
@@ -99,15 +104,20 @@ namespace
         }
 
         const std::wstring iniPath = pluginPath.substr(0, pluginSeparator + 1) + L"DS2NoSlowMo.ini";
-        HANDLE log = INVALID_HANDLE_VALUE;
-        try
+        HANDLE log = nullptr;
+        bool loggingEnabled = false;
+        if (TryReadSwitch(iniPath, L"Logging", L"EnableLogging", false, loggingEnabled) && loggingEnabled)
         {
-            const std::wstring logPath = pluginPath.substr(0, pluginSeparator + 1) + L"DS2NoSlowMo.log";
-            StartLog(log, logPath, processPath, pluginPath, iniPath);
-        }
-        catch (...)
-        {
-            OutputDebugStringA("DS2NoSlowMo: cannot complete startup logging.\n");
+            log = INVALID_HANDLE_VALUE;
+            try
+            {
+                const std::wstring logPath = pluginPath.substr(0, pluginSeparator + 1) + L"DS2NoSlowMo.log";
+                StartLog(log, logPath, processPath, pluginPath, iniPath);
+            }
+            catch (...)
+            {
+                OutputDebugStringA("DS2NoSlowMo: cannot complete startup logging.\n");
+            }
         }
 
         try
@@ -129,7 +139,7 @@ namespace
         {
             TimeScalePatch::Log(log, "Disabled: initialization raised an exception.\r\n");
         }
-        if (log != INVALID_HANDLE_VALUE)
+        if (log != nullptr && log != INVALID_HANDLE_VALUE)
             CloseHandle(log);
         return 0;
     }
@@ -144,10 +154,7 @@ BOOL APIENTRY DllMain(HMODULE module, DWORD reason, LPVOID)
         // Keep thread notifications: /MT links the static CRT, which needs them.
         HANDLE thread = CreateThread(nullptr, 0, Initialize, module, 0, nullptr);
         if (thread == nullptr)
-        {
-            OutputDebugStringA("DS2NoSlowMo: initialization thread creation failed.\n");
             return FALSE;
-        }
         CloseHandle(thread);
     }
     return TRUE;
