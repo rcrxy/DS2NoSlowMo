@@ -16,7 +16,7 @@ namespace BTVehiclePatch
                TimeScalePatch::Read(address, actual) && actual == value;
     }
 
-    void Run(const std::wstring &processPath, HANDLE log)
+    void Run(const std::wstring &processPath, HANDLE &log)
     {
         if (!TimeScalePatch::SupportedFile(processPath, log))
             return;

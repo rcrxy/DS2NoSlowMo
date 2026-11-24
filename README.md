@@ -2,7 +2,7 @@
 
 《死亡搁浅 2》ASI Mod，用于取消敌人击败、物品拾取和被发现时的慢动作，以及进入 BT 区时的载具强制停车。四项功能可独立配置，被发现和 BT 载具功能默认关闭。
 
-版本：`0.6.0` · 作者：`zeco` · 平台：Windows x64 / Steam
+版本：`0.6.1` · 作者：`zeco` · 平台：Windows x64 / Steam
 
 ## 功能
 
@@ -30,7 +30,7 @@
 3. 若尚未安装 ASI Loader，将包内 `version.dll` 放到同一目录；已有可用加载器时沿用现有配置，不覆盖其 DLL。
 4. 通过 Steam 启动游戏。
 
-发布包已包含 [Ultimate ASI Loader](https://github.com/ThirteenAG/Ultimate-ASI-Loader) `9.7.4` x64，无需另行下载。源码仓库中的 DLL 位于 `third_party/ultimate-asi-loader/version.dll`。插件启动后在 ASI 同目录生成 `DS2NoSlowMo.log`。
+发布包已包含 [Ultimate ASI Loader](https://github.com/ThirteenAG/Ultimate-ASI-Loader) `9.7.4` x64，无需另行下载。源码仓库中的 DLL 位于 `third_party/ultimate-asi-loader/version.dll`。插件启动时尝试在 ASI 同目录写入 `DS2NoSlowMo.log`。创建或写入失败时，插件继续初始化，诊断信息转到 Windows 调试输出。
 
 ## 配置
 
@@ -65,7 +65,7 @@ DisableBTVehicleShutdown=0
 | `Skipped:` | 配置为 `0`，跳过该项 |
 | `Disabled:` | 校验或访问失败，未应用该项 |
 
-没有日志时，检查 ASI Loader 和安装目录。报告问题时请提供游戏版本、插件版本、配置、复现步骤及相关日志行。
+没有日志时，可用调试器查看插件的 Windows 调试输出。报告问题时请提供游戏版本、插件版本、配置、复现步骤及相关诊断信息。
 
 恢复单项原效果：将其配置设为 `0` 并重启。卸载：退出游戏后移除 `DS2NoSlowMo.asi` 和 `DS2NoSlowMo.ini`；生成的日志也可删除。只有为本 Mod 安装且没有其他 Mod 依赖时，才移除随包提供的 `version.dll`。
 

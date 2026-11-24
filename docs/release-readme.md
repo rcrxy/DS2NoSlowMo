@@ -1,6 +1,6 @@
 # DS2NoSlowMo
 
-**Version:** 0.6.0 · **Author:** zeco
+**Version:** 0.6.1 · **Author:** zeco
 
 **Game:** DEATH STRANDING 2: ON THE BEACH · Windows x64 / Steam
 
@@ -34,7 +34,7 @@ Vehicle sampling used the encounter-animation setting that plays only the first 
 3. If you do not have an ASI loader, copy the included `version.dll` into the same directory. Otherwise, keep your working loader's DLL and configuration.
 4. Launch the game through Steam.
 
-Ultimate ASI Loader **9.7.4 x64** is included; no separate download is required. The plugin creates `DS2NoSlowMo.log` beside the ASI.
+Ultimate ASI Loader **9.7.4 x64** is included. At startup, the plugin attempts to write `DS2NoSlowMo.log` beside the ASI. If creating or writing the file fails, initialization continues and diagnostics go to Windows debug output.
 
 ## Configuration
 
@@ -69,7 +69,7 @@ Check `DS2NoSlowMo.log` for the plugin version and selected options:
 - `Skipped:`: option set to `0`.
 - `Disabled:`: validation or access failed.
 
-If no log appears, check the loader and installation directory. When reporting a problem, provide the game version, plugin version, INI settings, reproduction steps and relevant log lines.
+If no log appears, use a debugger to view Windows debug output. When reporting a problem, provide the game version, plugin version, INI settings, reproduction steps and relevant diagnostics.
 
 ## Removal
 

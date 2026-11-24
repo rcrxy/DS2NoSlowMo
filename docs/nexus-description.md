@@ -58,7 +58,7 @@ The detection option targets a request identified in a single human-enemy encoun
 
 ### Troubleshooting and removal
 
-Check `DS2NoSlowMo.log`: `Applied:` means success, `Skipped:` means an option is disabled, and `Disabled:` means validation or access failed. If no log appears, check the loader and installation directory.
+In `DS2NoSlowMo.log`, `Applied:` means the modification was applied, `Skipped:` means an option is disabled, and `Disabled:` means validation or access failed. If the plugin cannot create or write the file, it continues initialization and sends diagnostics to Windows debug output.
 
 To uninstall, exit the game and remove the ASI and INI. Remove the bundled `version.dll` only if you installed it for this mod and no other mods need it.
 
@@ -70,4 +70,4 @@ Author: **zeco**. MIT License, including original copyright notices. Inspired by
 
 ## File description
 
-0.6.0 — Adds an independent detection slowdown option, disabled by default and user-tested in a human-enemy encounter. Includes the ASI, INI, Ultimate ASI Loader 9.7.4 x64, installation guide and both MIT license files. No separate loader download required.
+0.6.1 continues plugin initialization when the log file cannot be created or written and sends diagnostics to Windows debug output in that case. Includes the ASI, INI, Ultimate ASI Loader 9.7.4 x64, installation guide and both MIT license files.

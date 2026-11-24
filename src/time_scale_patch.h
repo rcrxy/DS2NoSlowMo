@@ -27,7 +27,23 @@ namespace TimeScalePatch
     constexpr std::uintptr_t ParameterRTTI = 0xD708E0;
     constexpr std::uintptr_t CurveRTTI = 0x1B30D90;
 
-    void Log(HANDLE file, const char *format, ...)
+    void WriteLog(HANDLE &file, const char *message, DWORD length)
+    {
+        if (file != INVALID_HANDLE_VALUE)
+        {
+            DWORD written = 0;
+            if (WriteFile(file, message, length, &written, nullptr) &&
+                written == length && FlushFileBuffers(file))
+                return;
+
+            CloseHandle(file);
+            file = INVALID_HANDLE_VALUE;
+            OutputDebugStringA("DS2NoSlowMo: cannot write DS2NoSlowMo.log; using debug output.\n");
+        }
+        OutputDebugStringA(message);
+    }
+
+    void Log(HANDLE &file, const char *format, ...)
     {
         char buffer[512];
         va_list args;
@@ -35,11 +51,7 @@ namespace TimeScalePatch
         const int length = std::vsnprintf(buffer, sizeof(buffer), format, args);
         va_end(args);
         if (length > 0 && static_cast<size_t>(length) < sizeof(buffer))
-        {
-            DWORD written = 0;
-            WriteFile(file, buffer, static_cast<DWORD>(length), &written, nullptr);
-            FlushFileBuffers(file);
-        }
+            WriteLog(file, buffer, static_cast<DWORD>(length));
     }
 
     bool Read(std::uintptr_t address, void *data, size_t size)
@@ -54,7 +66,7 @@ namespace TimeScalePatch
         return Read(address, &value, sizeof(value));
     }
 
-    bool SupportedFile(const std::wstring &path, HANDLE log)
+    bool SupportedFile(const std::wstring &path, HANDLE &log)
     {
         DWORD ignored = 0;
         const DWORD size = GetFileVersionInfoSizeW(path.c_str(), &ignored);
@@ -183,7 +195,7 @@ namespace TimeScalePatch
     }
 
     // 0: retry until resources exist / requests finish; 1: applied; -1: reject this layout.
-    int TryApply(std::uintptr_t base, HANDLE log, Effect effect)
+    int TryApply(std::uintptr_t base, HANDLE &log, Effect effect)
     {
         const bool pickup = effect == Effect::Pickup;
         const bool detection = effect == Effect::Detection;
@@ -307,7 +319,7 @@ namespace TimeScalePatch
         return 1;
     }
 
-    void Run(const std::wstring &processPath, HANDLE log, bool enemyDefeat, bool pickup, bool detection)
+    void Run(const std::wstring &processPath, HANDLE &log, bool enemyDefeat, bool pickup, bool detection)
     {
         if (!SupportedFile(processPath, log))
             return;

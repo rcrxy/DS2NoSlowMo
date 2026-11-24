@@ -8,9 +8,9 @@
 
 namespace
 {
-    constexpr char PluginVersion[] = "0.6.0";
+    constexpr char PluginVersion[] = "0.6.1";
 
-    bool ReadSwitch(const std::wstring &iniPath, HANDLE log, const wchar_t *key, bool defaultEnabled, bool &enabled)
+    bool ReadSwitch(const std::wstring &iniPath, HANDLE &log, const wchar_t *key, bool defaultEnabled, bool &enabled)
     {
         wchar_t value[64]{};
         const DWORD length = GetPrivateProfileStringW(L"Features", key, defaultEnabled ? L"1" : L"0",
@@ -57,6 +57,28 @@ namespace
         return result;
     }
 
+    void StartLog(HANDLE &log, const std::wstring &logPath, const std::wstring &processPath,
+                  const std::wstring &pluginPath, const std::wstring &iniPath)
+    {
+        log = CreateFileW(logPath.c_str(), GENERIC_WRITE,
+                          FILE_SHARE_READ, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+        if (log == INVALID_HANDLE_VALUE)
+            OutputDebugStringA("DS2NoSlowMo: cannot create DS2NoSlowMo.log; using debug output.\n");
+
+        SYSTEMTIME now{};
+        GetLocalTime(&now);
+        TimeScalePatch::Log(log, "DS2NoSlowMo loaded\r\nPlugin version: %s\r\nPID: %lu\r\n"
+                                 "Local time: %04u-%02u-%02u %02u:%02u:%02u\r\n",
+                            PluginVersion, GetCurrentProcessId(), now.wYear, now.wMonth, now.wDay,
+                            now.wHour, now.wMinute, now.wSecond);
+        const std::string message = "Process: " + Utf8(processPath) + "\r\nPlugin: " + Utf8(pluginPath) +
+                                    "\r\nConfiguration file: " + Utf8(iniPath) +
+                                    "\r\nMode: configured slowdown curves and BT vehicle shutdown patch.\r\n";
+        TimeScalePatch::WriteLog(log, message.c_str(), static_cast<DWORD>(message.size()));
+        if (log != INVALID_HANDLE_VALUE)
+            OutputDebugStringA("DS2NoSlowMo loaded.\n");
+    }
+
     DWORD WINAPI Initialize(LPVOID parameter)
     {
         const auto module = static_cast<HMODULE>(parameter);
@@ -77,62 +99,39 @@ namespace
         }
 
         const std::wstring iniPath = pluginPath.substr(0, pluginSeparator + 1) + L"DS2NoSlowMo.ini";
-        const std::wstring logPath = pluginPath.substr(0, pluginSeparator + 1) +
-                                     L"DS2NoSlowMo.log";
-        HANDLE log = CreateFileW(logPath.c_str(), GENERIC_WRITE,
-                                 FILE_SHARE_READ, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
-        if (log == INVALID_HANDLE_VALUE)
+        HANDLE log = INVALID_HANDLE_VALUE;
+        try
         {
-            OutputDebugStringA("DS2NoSlowMo: cannot create DS2NoSlowMo.log beside the ASI.\n");
-            return 1;
+            const std::wstring logPath = pluginPath.substr(0, pluginSeparator + 1) + L"DS2NoSlowMo.log";
+            StartLog(log, logPath, processPath, pluginPath, iniPath);
+        }
+        catch (...)
+        {
+            OutputDebugStringA("DS2NoSlowMo: cannot complete startup logging.\n");
         }
 
-        SYSTEMTIME now{};
-        GetLocalTime(&now);
-        char header[256];
-        const int headerLength = std::snprintf(header, sizeof(header),
-                                               "DS2NoSlowMo loaded\r\nPlugin version: %s\r\nPID: %lu\r\n"
-                                               "Local time: %04u-%02u-%02u %02u:%02u:%02u\r\n",
-                                               PluginVersion, GetCurrentProcessId(), now.wYear, now.wMonth, now.wDay,
-                                               now.wHour, now.wMinute, now.wSecond);
-        if (headerLength <= 0 || static_cast<size_t>(headerLength) >= sizeof(header))
+        try
         {
+            bool enemyDefeat = false, pickup = false, btVehicle = false, detection = false;
+            const bool enemyValid = ReadSwitch(iniPath, log, L"DisableEnemyDefeatSlowMo", true, enemyDefeat);
+            const bool pickupValid = ReadSwitch(iniPath, log, L"DisablePickupSlowMo", true, pickup);
+            const bool btVehicleValid = ReadSwitch(iniPath, log, L"DisableBTVehicleShutdown", false, btVehicle);
+            const bool detectionValid = ReadSwitch(iniPath, log, L"DisableDetectionSlowMo", false, detection);
+            if (btVehicleValid && btVehicle)
+                BTVehiclePatch::Run(processPath, log);
+            if ((enemyValid && enemyDefeat) || (pickupValid && pickup) || (detectionValid && detection))
+                TimeScalePatch::Run(processPath, log, enemyValid && enemyDefeat, pickupValid && pickup,
+                                    detectionValid && detection);
+            else if (!(btVehicleValid && btVehicle))
+                TimeScalePatch::Log(log, "No enabled effects; game data unchanged.\r\n");
+        }
+        catch (...)
+        {
+            TimeScalePatch::Log(log, "Disabled: initialization raised an exception.\r\n");
+        }
+        if (log != INVALID_HANDLE_VALUE)
             CloseHandle(log);
-            return 1;
-        }
-        const std::string message = std::string(header, headerLength) +
-                                    "Process: " + Utf8(processPath) + "\r\nPlugin: " + Utf8(pluginPath) +
-                                    "\r\nConfiguration file: " + Utf8(iniPath) +
-                                    "\r\nMode: configured slowdown curves and BT vehicle shutdown patch.\r\n";
-        DWORD written = 0;
-        const DWORD size = static_cast<DWORD>(message.size());
-        const bool success = WriteFile(log, message.data(), size, &written, nullptr) &&
-                             written == size;
-        OutputDebugStringA(success ? "DS2NoSlowMo loaded.\n" : "DS2NoSlowMo: log write failed.\n");
-        if (success)
-        {
-            try
-            {
-                bool enemyDefeat = false, pickup = false, btVehicle = false, detection = false;
-                const bool enemyValid = ReadSwitch(iniPath, log, L"DisableEnemyDefeatSlowMo", true, enemyDefeat);
-                const bool pickupValid = ReadSwitch(iniPath, log, L"DisablePickupSlowMo", true, pickup);
-                const bool btVehicleValid = ReadSwitch(iniPath, log, L"DisableBTVehicleShutdown", false, btVehicle);
-                const bool detectionValid = ReadSwitch(iniPath, log, L"DisableDetectionSlowMo", false, detection);
-                if (btVehicleValid && btVehicle)
-                    BTVehiclePatch::Run(processPath, log);
-                if ((enemyValid && enemyDefeat) || (pickupValid && pickup) || (detectionValid && detection))
-                    TimeScalePatch::Run(processPath, log, enemyValid && enemyDefeat, pickupValid && pickup,
-                                        detectionValid && detection);
-                else if (!(btVehicleValid && btVehicle))
-                    TimeScalePatch::Log(log, "No enabled effects; game data unchanged.\r\n");
-            }
-            catch (...)
-            {
-                TimeScalePatch::Log(log, "Disabled: initialization raised an exception.\r\n");
-            }
-        }
-        CloseHandle(log);
-        return success ? 0 : 1;
+        return 0;
     }
 
 } // namespace
